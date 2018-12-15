@@ -49,12 +49,12 @@
  */
 
 static const __u16 wiimod_keys_map[] = {
-	KEY_LEFT,	/* WIIPROTO_KEY_LEFT */
-	KEY_RIGHT,	/* WIIPROTO_KEY_RIGHT */
-	KEY_UP,		/* WIIPROTO_KEY_UP */
-	KEY_DOWN,	/* WIIPROTO_KEY_DOWN */
-	KEY_NEXT,	/* WIIPROTO_KEY_PLUS */
-	KEY_PREVIOUS,	/* WIIPROTO_KEY_MINUS */
+	BTN_DPAD_LEFT,	/* WIIPROTO_KEY_LEFT */
+	BTN_DPAD_RIGHT,	/* WIIPROTO_KEY_RIGHT */
+	BTN_DPAD_UP,	/* WIIPROTO_KEY_UP */
+	BTN_DPAD_DOWN,	/* WIIPROTO_KEY_DOWN */
+	BTN_START,	/* WIIPROTO_KEY_PLUS */
+	BTN_SELECT,	/* WIIPROTO_KEY_MINUS */
 	BTN_1,		/* WIIPROTO_KEY_ONE */
 	BTN_2,		/* WIIPROTO_KEY_TWO */
 	BTN_A,		/* WIIPROTO_KEY_A */
@@ -453,9 +453,9 @@ static void wiimod_accel_in_accel(struct wiimote_data *wdata,
 	y |= (accel[1] >> 4) & 0x2;
 	z |= (accel[1] >> 5) & 0x2;
 
-	input_report_abs(wdata->accel, ABS_RX, x - 0x200);
-	input_report_abs(wdata->accel, ABS_RY, y - 0x200);
-	input_report_abs(wdata->accel, ABS_RZ, z - 0x200);
+	input_report_abs(wdata->accel, ABS_X, x - 0x200);
+	input_report_abs(wdata->accel, ABS_Y, y - 0x200);
+	input_report_abs(wdata->accel, ABS_Z, z - 0x200);
 	input_sync(wdata->accel);
 }
 
@@ -560,6 +560,7 @@ static void wiimod_ir_in_ir(struct wiimote_data *wdata, const __u8 *ir,
 	if (!(wdata->state.flags & WIIPROTO_FLAGS_IR))
 		return;
 
+        /* TODO: use MT protocol? */
 	switch (id) {
 	case 0:
 		xid = ABS_HAT0X;
@@ -736,6 +737,7 @@ static void wiimod_ir_close(struct input_dev *dev)
 static int wiimod_ir_probe(const struct wiimod_ops *ops,
 			   struct wiimote_data *wdata)
 {
+	/* TODO: use MT protocol? */
 	int ret;
 
 	wdata->ir = input_allocate_device();
@@ -878,8 +880,8 @@ static void wiimod_nunchuk_in_ext(struct wiimote_data *wdata, const __u8 *ext)
 	y -= 0x200;
 	z -= 0x200;
 
-	input_report_abs(wdata->extension.input, ABS_HAT0X, bx);
-	input_report_abs(wdata->extension.input, ABS_HAT0Y, by);
+	input_report_abs(wdata->extension.input, ABS_X, bx);
+	input_report_abs(wdata->extension.input, ABS_Y, by);
 
 	input_report_abs(wdata->extension.input, ABS_RX, x);
 	input_report_abs(wdata->extension.input, ABS_RY, y);
@@ -953,12 +955,12 @@ static int wiimod_nunchuk_probe(const struct wiimod_ops *ops,
 			wdata->extension.input->keybit);
 
 	set_bit(EV_ABS, wdata->extension.input->evbit);
-	set_bit(ABS_HAT0X, wdata->extension.input->absbit);
-	set_bit(ABS_HAT0Y, wdata->extension.input->absbit);
+	set_bit(ABS_X, wdata->extension.input->absbit);
+	set_bit(ABS_Y, wdata->extension.input->absbit);
 	input_set_abs_params(wdata->extension.input,
-			     ABS_HAT0X, -120, 120, 2, 4);
+			     ABS_X, -120, 120, 2, 4);
 	input_set_abs_params(wdata->extension.input,
-			     ABS_HAT0Y, -120, 120, 2, 4);
+			     ABS_Y, -120, 120, 2, 4);
 	set_bit(ABS_RX, wdata->extension.input->absbit);
 	set_bit(ABS_RY, wdata->extension.input->absbit);
 	set_bit(ABS_RZ, wdata->extension.input->absbit);
@@ -1033,13 +1035,13 @@ static const __u16 wiimod_classic_map[] = {
 	BTN_Y,		/* WIIMOD_CLASSIC_KEY_Y */
 	BTN_TL2,	/* WIIMOD_CLASSIC_KEY_ZL */
 	BTN_TR2,	/* WIIMOD_CLASSIC_KEY_ZR */
-	KEY_NEXT,	/* WIIMOD_CLASSIC_KEY_PLUS */
-	KEY_PREVIOUS,	/* WIIMOD_CLASSIC_KEY_MINUS */
+	BTN_START,	/* WIIMOD_CLASSIC_KEY_PLUS */
+	BTN_SELECT,	/* WIIMOD_CLASSIC_KEY_MINUS */
 	BTN_MODE,	/* WIIMOD_CLASSIC_KEY_HOME */
-	KEY_LEFT,	/* WIIMOD_CLASSIC_KEY_LEFT */
-	KEY_RIGHT,	/* WIIMOD_CLASSIC_KEY_RIGHT */
-	KEY_UP,		/* WIIMOD_CLASSIC_KEY_UP */
-	KEY_DOWN,	/* WIIMOD_CLASSIC_KEY_DOWN */
+	BTN_DPAD_LEFT,	/* WIIMOD_CLASSIC_KEY_LEFT */
+	BTN_DPAD_RIGHT,	/* WIIMOD_CLASSIC_KEY_RIGHT */
+	BTN_DPAD_UP,	/* WIIMOD_CLASSIC_KEY_UP */
+	BTN_DPAD_DOWN,	/* WIIMOD_CLASSIC_KEY_DOWN */
 	BTN_TL,		/* WIIMOD_CLASSIC_KEY_LT */
 	BTN_TR,		/* WIIMOD_CLASSIC_KEY_RT */
 };
@@ -1113,12 +1115,12 @@ static void wiimod_classic_in_ext(struct wiimote_data *wdata, const __u8 *ext)
 	rt <<= 1;
 	lt <<= 1;
 
-	input_report_abs(wdata->extension.input, ABS_HAT1X, lx - 0x20);
-	input_report_abs(wdata->extension.input, ABS_HAT1Y, ly - 0x20);
-	input_report_abs(wdata->extension.input, ABS_HAT2X, rx - 0x20);
-	input_report_abs(wdata->extension.input, ABS_HAT2Y, ry - 0x20);
-	input_report_abs(wdata->extension.input, ABS_HAT3X, rt);
-	input_report_abs(wdata->extension.input, ABS_HAT3Y, lt);
+	input_report_abs(wdata->extension.input, ABS_X, lx - 0x20);
+	input_report_abs(wdata->extension.input, ABS_Y, ly - 0x20);
+	input_report_abs(wdata->extension.input, ABS_RX, rx - 0x20);
+	input_report_abs(wdata->extension.input, ABS_RY, ry - 0x20);
+	input_report_abs(wdata->extension.input, ABS_HAT0X, lt);
+	input_report_abs(wdata->extension.input, ABS_HAT1X, rt);
 
 	input_report_key(wdata->extension.input,
 			 wiimod_classic_map[WIIMOD_CLASSIC_KEY_RIGHT],
@@ -1228,24 +1230,24 @@ static int wiimod_classic_probe(const struct wiimod_ops *ops,
 			wdata->extension.input->keybit);
 
 	set_bit(EV_ABS, wdata->extension.input->evbit);
+	set_bit(ABS_X, wdata->extension.input->absbit);
+	set_bit(ABS_Y, wdata->extension.input->absbit);
+	set_bit(ABS_RX, wdata->extension.input->absbit);
+	set_bit(ABS_RY, wdata->extension.input->absbit);
+	set_bit(ABS_HAT0X, wdata->extension.input->absbit);
 	set_bit(ABS_HAT1X, wdata->extension.input->absbit);
-	set_bit(ABS_HAT1Y, wdata->extension.input->absbit);
-	set_bit(ABS_HAT2X, wdata->extension.input->absbit);
-	set_bit(ABS_HAT2Y, wdata->extension.input->absbit);
-	set_bit(ABS_HAT3X, wdata->extension.input->absbit);
-	set_bit(ABS_HAT3Y, wdata->extension.input->absbit);
+	input_set_abs_params(wdata->extension.input,
+			     ABS_X, -30, 30, 1, 1);
+	input_set_abs_params(wdata->extension.input,
+			     ABS_Y, -30, 30, 1, 1);
+	input_set_abs_params(wdata->extension.input,
+			     ABS_RX, -30, 30, 1, 1);
+	input_set_abs_params(wdata->extension.input,
+			     ABS_RY, -30, 30, 1, 1);
+	input_set_abs_params(wdata->extension.input,
+			     ABS_HAT0X, -30, 30, 1, 1);
 	input_set_abs_params(wdata->extension.input,
 			     ABS_HAT1X, -30, 30, 1, 1);
-	input_set_abs_params(wdata->extension.input,
-			     ABS_HAT1Y, -30, 30, 1, 1);
-	input_set_abs_params(wdata->extension.input,
-			     ABS_HAT2X, -30, 30, 1, 1);
-	input_set_abs_params(wdata->extension.input,
-			     ABS_HAT2Y, -30, 30, 1, 1);
-	input_set_abs_params(wdata->extension.input,
-			     ABS_HAT3X, -30, 30, 1, 1);
-	input_set_abs_params(wdata->extension.input,
-			     ABS_HAT3Y, -30, 30, 1, 1);
 
 	ret = input_register_device(wdata->extension.input);
 	if (ret)
@@ -1364,9 +1366,9 @@ static void wiimod_bboard_in_ext(struct wiimote_data *wdata,
 	}
 
 	input_report_abs(wdata->extension.input, ABS_HAT0X, val[0]);
-	input_report_abs(wdata->extension.input, ABS_HAT0Y, val[1]);
-	input_report_abs(wdata->extension.input, ABS_HAT1X, val[2]);
-	input_report_abs(wdata->extension.input, ABS_HAT1Y, val[3]);
+	input_report_abs(wdata->extension.input, ABS_HAT1X, val[1]);
+	input_report_abs(wdata->extension.input, ABS_HAT2X, val[2]);
+	input_report_abs(wdata->extension.input, ABS_HAT3X, val[3]);
 	input_sync(wdata->extension.input);
 }
 
@@ -1505,17 +1507,17 @@ static int wiimod_bboard_probe(const struct wiimod_ops *ops,
 
 	set_bit(EV_ABS, wdata->extension.input->evbit);
 	set_bit(ABS_HAT0X, wdata->extension.input->absbit);
-	set_bit(ABS_HAT0Y, wdata->extension.input->absbit);
 	set_bit(ABS_HAT1X, wdata->extension.input->absbit);
-	set_bit(ABS_HAT1Y, wdata->extension.input->absbit);
+	set_bit(ABS_HAT2X, wdata->extension.input->absbit);
+	set_bit(ABS_HAT3X, wdata->extension.input->absbit);
 	input_set_abs_params(wdata->extension.input,
 			     ABS_HAT0X, 0, 65535, 2, 4);
 	input_set_abs_params(wdata->extension.input,
-			     ABS_HAT0Y, 0, 65535, 2, 4);
-	input_set_abs_params(wdata->extension.input,
 			     ABS_HAT1X, 0, 65535, 2, 4);
 	input_set_abs_params(wdata->extension.input,
-			     ABS_HAT1Y, 0, 65535, 2, 4);
+			     ABS_HAT2X, 0, 65535, 2, 4);
+	input_set_abs_params(wdata->extension.input,
+			     ABS_HAT3X, 0, 65535, 2, 4);
 
 	ret = input_register_device(wdata->extension.input);
 	if (ret)
@@ -1585,10 +1587,10 @@ enum wiimod_pro_keys {
 };
 
 static const __u16 wiimod_pro_map[] = {
-	BTN_EAST,	/* WIIMOD_PRO_KEY_A */
-	BTN_SOUTH,	/* WIIMOD_PRO_KEY_B */
-	BTN_NORTH,	/* WIIMOD_PRO_KEY_X */
-	BTN_WEST,	/* WIIMOD_PRO_KEY_Y */
+	BTN_A,	/* WIIMOD_PRO_KEY_A */
+	BTN_B,	/* WIIMOD_PRO_KEY_B */
+	BTN_X,	/* WIIMOD_PRO_KEY_X */
+	BTN_Y,	/* WIIMOD_PRO_KEY_Y */
 	BTN_START,	/* WIIMOD_PRO_KEY_PLUS */
 	BTN_SELECT,	/* WIIMOD_PRO_KEY_MINUS */
 	BTN_MODE,	/* WIIMOD_PRO_KEY_HOME */
@@ -2145,6 +2147,8 @@ static int wiimod_mp_probe(const struct wiimod_ops *ops,
 			     ABS_RY, -16000, 16000, 4, 8);
 	input_set_abs_params(wdata->mp,
 			     ABS_RZ, -16000, 16000, 4, 8);
+
+	set_bit(INPUT_PROP_ACCELEROMETER, wdata->mp->propbit);
 
 	ret = input_register_device(wdata->mp);
 	if (ret)
