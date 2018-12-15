@@ -94,9 +94,8 @@ static int wiimod_keys_probe(const struct wiimod_ops *ops,
 {
 	unsigned int i;
 
-	set_bit(EV_KEY, wdata->input->evbit);
 	for (i = 0; i < WIIPROTO_KEY_COUNT; ++i)
-		set_bit(wiimod_keys_map[i], wdata->input->keybit);
+		input_set_capability(wdata->input, EV_KEY, wiimod_keys_map[i]);
 
 	return 0;
 }
@@ -160,7 +159,7 @@ static int wiimod_rumble_probe(const struct wiimod_ops *ops,
 {
 	INIT_WORK(&wdata->rumble_worker, wiimod_rumble_worker);
 
-	set_bit(FF_RUMBLE, wdata->input->ffbit);
+	input_set_capability(wdata->input, EV_FF, FF_RUMBLE);
 	if (input_ff_create_memless(wdata->input, NULL, wiimod_rumble_play))
 		return -ENOMEM;
 
@@ -500,13 +499,14 @@ static int wiimod_accel_probe(const struct wiimod_ops *ops,
 	wdata->accel->id.version = wdata->hdev->version;
 	wdata->accel->name = WIIMOTE_NAME " Accelerometer";
 
-	set_bit(EV_ABS, wdata->accel->evbit);
-	set_bit(ABS_RX, wdata->accel->absbit);
-	set_bit(ABS_RY, wdata->accel->absbit);
-	set_bit(ABS_RZ, wdata->accel->absbit);
-	input_set_abs_params(wdata->accel, ABS_RX, -500, 500, 2, 4);
-	input_set_abs_params(wdata->accel, ABS_RY, -500, 500, 2, 4);
-	input_set_abs_params(wdata->accel, ABS_RZ, -500, 500, 2, 4);
+	input_set_capability(wdata->accel, EV_ABS, ABS_X);
+	input_set_capability(wdata->accel, EV_ABS, ABS_Y);
+	input_set_capability(wdata->accel, EV_ABS, ABS_Z);
+	input_set_abs_params(wdata->accel, ABS_X, -500, 500, 2, 4);
+	input_set_abs_params(wdata->accel, ABS_Y, -500, 500, 2, 4);
+	input_set_abs_params(wdata->accel, ABS_Z, -500, 500, 2, 4);
+
+	set_bit(INPUT_PROP_ACCELEROMETER, wdata->accel->propbit);
 
 	ret = input_register_device(wdata->accel);
 	if (ret) {
@@ -754,15 +754,14 @@ static int wiimod_ir_probe(const struct wiimod_ops *ops,
 	wdata->ir->id.version = wdata->hdev->version;
 	wdata->ir->name = WIIMOTE_NAME " IR";
 
-	set_bit(EV_ABS, wdata->ir->evbit);
-	set_bit(ABS_HAT0X, wdata->ir->absbit);
-	set_bit(ABS_HAT0Y, wdata->ir->absbit);
-	set_bit(ABS_HAT1X, wdata->ir->absbit);
-	set_bit(ABS_HAT1Y, wdata->ir->absbit);
-	set_bit(ABS_HAT2X, wdata->ir->absbit);
-	set_bit(ABS_HAT2Y, wdata->ir->absbit);
-	set_bit(ABS_HAT3X, wdata->ir->absbit);
-	set_bit(ABS_HAT3Y, wdata->ir->absbit);
+	input_set_capability(wdata->ir, EV_ABS, ABS_HAT0X);
+	input_set_capability(wdata->ir, EV_ABS, ABS_HAT0Y);
+	input_set_capability(wdata->ir, EV_ABS, ABS_HAT1X);
+	input_set_capability(wdata->ir, EV_ABS, ABS_HAT1Y);
+	input_set_capability(wdata->ir, EV_ABS, ABS_HAT2X);
+	input_set_capability(wdata->ir, EV_ABS, ABS_HAT2Y);
+	input_set_capability(wdata->ir, EV_ABS, ABS_HAT3X);
+	input_set_capability(wdata->ir, EV_ABS, ABS_HAT3Y);
 	input_set_abs_params(wdata->ir, ABS_HAT0X, 0, 1023, 2, 4);
 	input_set_abs_params(wdata->ir, ABS_HAT0Y, 0, 767, 2, 4);
 	input_set_abs_params(wdata->ir, ABS_HAT1X, 0, 1023, 2, 4);
@@ -949,21 +948,19 @@ static int wiimod_nunchuk_probe(const struct wiimod_ops *ops,
 	wdata->extension.input->id.version = wdata->hdev->version;
 	wdata->extension.input->name = WIIMOTE_NAME " Nunchuk";
 
-	set_bit(EV_KEY, wdata->extension.input->evbit);
 	for (i = 0; i < WIIMOD_NUNCHUK_KEY_NUM; ++i)
-		set_bit(wiimod_nunchuk_map[i],
-			wdata->extension.input->keybit);
+		input_set_capability(wdata->extension.input,
+				     EV_KEY, wiimod_nunchuk_map[i]);
 
-	set_bit(EV_ABS, wdata->extension.input->evbit);
-	set_bit(ABS_X, wdata->extension.input->absbit);
-	set_bit(ABS_Y, wdata->extension.input->absbit);
+	input_set_capability(wdata->extension.input, EV_ABS, ABS_X);
+	input_set_capability(wdata->extension.input, EV_ABS, ABS_Y);
 	input_set_abs_params(wdata->extension.input,
 			     ABS_X, -120, 120, 2, 4);
 	input_set_abs_params(wdata->extension.input,
 			     ABS_Y, -120, 120, 2, 4);
-	set_bit(ABS_RX, wdata->extension.input->absbit);
-	set_bit(ABS_RY, wdata->extension.input->absbit);
-	set_bit(ABS_RZ, wdata->extension.input->absbit);
+	input_set_capability(wdata->extension.input, EV_ABS, ABS_RX);
+	input_set_capability(wdata->extension.input, EV_ABS, ABS_RY);
+	input_set_capability(wdata->extension.input, EV_ABS, ABS_RZ);
 	input_set_abs_params(wdata->extension.input,
 			     ABS_RX, -500, 500, 2, 4);
 	input_set_abs_params(wdata->extension.input,
@@ -1224,18 +1221,16 @@ static int wiimod_classic_probe(const struct wiimod_ops *ops,
 	wdata->extension.input->id.version = wdata->hdev->version;
 	wdata->extension.input->name = WIIMOTE_NAME " Classic Controller";
 
-	set_bit(EV_KEY, wdata->extension.input->evbit);
 	for (i = 0; i < WIIMOD_CLASSIC_KEY_NUM; ++i)
-		set_bit(wiimod_classic_map[i],
-			wdata->extension.input->keybit);
+		input_set_capability(wdata->extension.input,
+				     EV_KEY, wiimod_classic_map[i]);
 
-	set_bit(EV_ABS, wdata->extension.input->evbit);
-	set_bit(ABS_X, wdata->extension.input->absbit);
-	set_bit(ABS_Y, wdata->extension.input->absbit);
-	set_bit(ABS_RX, wdata->extension.input->absbit);
-	set_bit(ABS_RY, wdata->extension.input->absbit);
-	set_bit(ABS_HAT0X, wdata->extension.input->absbit);
-	set_bit(ABS_HAT1X, wdata->extension.input->absbit);
+	input_set_capability(wdata->extension.input, EV_ABS, ABS_X);
+	input_set_capability(wdata->extension.input, EV_ABS, ABS_Y);
+	input_set_capability(wdata->extension.input, EV_ABS, ABS_RX);
+	input_set_capability(wdata->extension.input, EV_ABS, ABS_RX);
+	input_set_capability(wdata->extension.input, EV_ABS, ABS_HAT0X);
+	input_set_capability(wdata->extension.input, EV_ABS, ABS_HAT1X);
 	input_set_abs_params(wdata->extension.input,
 			     ABS_X, -30, 30, 1, 1);
 	input_set_abs_params(wdata->extension.input,
@@ -1502,14 +1497,12 @@ static int wiimod_bboard_probe(const struct wiimod_ops *ops,
 	wdata->extension.input->id.version = wdata->hdev->version;
 	wdata->extension.input->name = WIIMOTE_NAME " Balance Board";
 
-	set_bit(EV_KEY, wdata->extension.input->evbit);
-	set_bit(BTN_A, wdata->extension.input->keybit);
+	input_set_capability(wdata->extension.input, EV_KEY, BTN_A);
 
-	set_bit(EV_ABS, wdata->extension.input->evbit);
-	set_bit(ABS_HAT0X, wdata->extension.input->absbit);
-	set_bit(ABS_HAT1X, wdata->extension.input->absbit);
-	set_bit(ABS_HAT2X, wdata->extension.input->absbit);
-	set_bit(ABS_HAT3X, wdata->extension.input->absbit);
+	input_set_capability(wdata->extension.input, EV_ABS, ABS_HAT0X);
+	input_set_capability(wdata->extension.input, EV_ABS, ABS_HAT1X);
+	input_set_capability(wdata->extension.input, EV_ABS, ABS_HAT2X);
+	input_set_capability(wdata->extension.input, EV_ABS, ABS_HAT3X);
 	input_set_abs_params(wdata->extension.input,
 			     ABS_HAT0X, 0, 65535, 2, 4);
 	input_set_abs_params(wdata->extension.input,
@@ -1865,7 +1858,7 @@ static int wiimod_pro_probe(const struct wiimod_ops *ops,
 	if (!wdata->extension.input)
 		return -ENOMEM;
 
-	set_bit(FF_RUMBLE, wdata->extension.input->ffbit);
+	input_set_capability(wdata->extension.input, EV_FF, FF_RUMBLE);
 	input_set_drvdata(wdata->extension.input, wdata);
 
 	if (input_ff_create_memless(wdata->extension.input, NULL,
@@ -1890,16 +1883,14 @@ static int wiimod_pro_probe(const struct wiimod_ops *ops,
 	wdata->extension.input->id.version = wdata->hdev->version;
 	wdata->extension.input->name = WIIMOTE_NAME " Pro Controller";
 
-	set_bit(EV_KEY, wdata->extension.input->evbit);
 	for (i = 0; i < WIIMOD_PRO_KEY_NUM; ++i)
-		set_bit(wiimod_pro_map[i],
-			wdata->extension.input->keybit);
+		input_set_capability(wdata->extension.input,
+				     EV_KEY, wiimod_pro_map[i]);
 
-	set_bit(EV_ABS, wdata->extension.input->evbit);
-	set_bit(ABS_X, wdata->extension.input->absbit);
-	set_bit(ABS_Y, wdata->extension.input->absbit);
-	set_bit(ABS_RX, wdata->extension.input->absbit);
-	set_bit(ABS_RY, wdata->extension.input->absbit);
+	input_set_capability(wdata->extension.input, EV_ABS, ABS_X);
+	input_set_capability(wdata->extension.input, EV_ABS, ABS_Y);
+	input_set_capability(wdata->extension.input, EV_ABS, ABS_RX);
+	input_set_capability(wdata->extension.input, EV_ABS, ABS_RY);
 	input_set_abs_params(wdata->extension.input,
 			     ABS_X, -0x400, 0x400, 4, 100);
 	input_set_abs_params(wdata->extension.input,
@@ -2137,10 +2128,9 @@ static int wiimod_mp_probe(const struct wiimod_ops *ops,
 	wdata->mp->id.version = wdata->hdev->version;
 	wdata->mp->name = WIIMOTE_NAME " Motion Plus";
 
-	set_bit(EV_ABS, wdata->mp->evbit);
-	set_bit(ABS_RX, wdata->mp->absbit);
-	set_bit(ABS_RY, wdata->mp->absbit);
-	set_bit(ABS_RZ, wdata->mp->absbit);
+	input_set_capability(wdata->mp, EV_ABS, ABS_RX);
+	input_set_capability(wdata->mp, EV_ABS, ABS_RY);
+	input_set_capability(wdata->mp, EV_ABS, ABS_RZ);
 	input_set_abs_params(wdata->mp,
 			     ABS_RX, -16000, 16000, 4, 8);
 	input_set_abs_params(wdata->mp,
