@@ -427,7 +427,8 @@ static const struct wiimod_ops wiimod_leds[4] = {
 static void wiimod_accel_in_accel(struct wiimote_data *wdata,
 				  const __u8 *accel)
 {
-	__u16 x, y, z;
+
+	__s16 x, y, z;
 
 	if (!(wdata->state.flags & WIIPROTO_FLAG_ACCEL))
 		return;
@@ -452,9 +453,13 @@ static void wiimod_accel_in_accel(struct wiimote_data *wdata,
 	y |= (accel[1] >> 4) & 0x2;
 	z |= (accel[1] >> 5) & 0x2;
 
-	input_report_abs(wdata->accel, ABS_X, x - 0x200);
-	input_report_abs(wdata->accel, ABS_Y, y - 0x200);
-	input_report_abs(wdata->accel, ABS_Z, z - 0x200);
+	x = x - 0x200;
+	y = y - 0x200;
+	z = z - 0x200;
+
+	input_report_abs(wdata->accel, ABS_X, x);
+	input_report_abs(wdata->accel, ABS_Y, y);
+	input_report_abs(wdata->accel, ABS_Z, z);
 	input_sync(wdata->accel);
 }
 
@@ -505,7 +510,15 @@ static int wiimod_accel_probe(const struct wiimod_ops *ops,
 	input_set_abs_params(wdata->accel, ABS_X, -500, 500, 2, 4);
 	input_set_abs_params(wdata->accel, ABS_Y, -500, 500, 2, 4);
 	input_set_abs_params(wdata->accel, ABS_Z, -500, 500, 2, 4);
-
+	/*
+	  Linux convention:
+	  When INPUT_PROP_ACCELEROMETER is set the resolution changes.
+	  The main axes (ABS_X, ABS_Y, ABS_Z) are then reported in
+	  in units per g (units/g)
+	 */
+	input_abs_set_res(wdata->accel, ABS_X, 100);
+	input_abs_set_res(wdata->accel, ABS_Y, 100);
+	input_abs_set_res(wdata->accel, ABS_Z, 100);
 	set_bit(INPUT_PROP_ACCELEROMETER, wdata->accel->propbit);
 
 	ret = input_register_device(wdata->accel);
@@ -2072,7 +2085,7 @@ static void wiimod_mp_in_mp(struct wiimote_data *wdata, const __u8 *ext)
 	 *   -----+------------------------------+-----+-----+
 	 * The single bits Yaw, Roll, Pitch in the lower right corner specify
 	 * whether the wiimote is rotating fast (0) or slow (1). Speed for slow
-	 * roation is 8192/440 units / deg/s and for fast rotation 8192/2000
+	 * rotation is 8192/440 units / deg/s and for fast rotation 8192/2000
 	 * units / deg/s. To get a linear scale for fast rotation we multiply
 	 * by 2000/440 = ~4.5454 and scale both fast and slow by 9 to match the
 	 * previous scale reported by this driver.
@@ -2107,9 +2120,9 @@ static void wiimod_mp_in_mp(struct wiimote_data *wdata, const __u8 *ext)
 	else
 		z *= 9;
 
-	input_report_abs(wdata->mp, ABS_RX, x);
-	input_report_abs(wdata->mp, ABS_RY, y);
-	input_report_abs(wdata->mp, ABS_RZ, z);
+	input_report_rel(wdata->mp, ABS_RX, x);
+	input_report_rel(wdata->mp, ABS_RY, y);
+	input_report_rel(wdata->mp, ABS_RZ, z);
 	input_sync(wdata->mp);
 }
 
@@ -2161,12 +2174,22 @@ static int wiimod_mp_probe(const struct wiimod_ops *ops,
 	input_set_capability(wdata->mp, EV_ABS, ABS_RX);
 	input_set_capability(wdata->mp, EV_ABS, ABS_RY);
 	input_set_capability(wdata->mp, EV_ABS, ABS_RZ);
+
 	input_set_abs_params(wdata->mp,
 			     ABS_RX, -16000, 16000, 4, 8);
 	input_set_abs_params(wdata->mp,
 			     ABS_RY, -16000, 16000, 4, 8);
 	input_set_abs_params(wdata->mp,
 			     ABS_RZ, -16000, 16000, 4, 8);
+	/*
+	  Linux convention:
+	  When INPUT_PROP_ACCELEROMETER is set the resolution changes.
+	  [...] in units per degree per second
+	  (units/deg/s) for rotational axes (ABS_RX, ABS_RY, ABS_RZ).
+	*/
+	input_abs_set_res(wdata->mp, ABS_RX, 168);
+	input_abs_set_res(wdata->mp, ABS_RY, 168);
+	input_abs_set_res(wdata->mp, ABS_RZ, 168);
 
 	set_bit(INPUT_PROP_ACCELEROMETER, wdata->mp->propbit);
 
