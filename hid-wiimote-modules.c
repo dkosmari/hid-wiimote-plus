@@ -2120,9 +2120,9 @@ static void wiimod_mp_in_mp(struct wiimote_data *wdata, const __u8 *ext)
 	else
 		z *= 9;
 
-	input_report_rel(wdata->mp, ABS_RX, x);
-	input_report_rel(wdata->mp, ABS_RY, y);
-	input_report_rel(wdata->mp, ABS_RZ, z);
+	input_report_abs(wdata->mp, ABS_RX, x);
+	input_report_abs(wdata->mp, ABS_RY, y);
+	input_report_abs(wdata->mp, ABS_RZ, z);
 	input_sync(wdata->mp);
 }
 
