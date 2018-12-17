@@ -879,8 +879,12 @@ static void wiimod_nunchuk_in_ext(struct wiimote_data *wdata, const __u8 *ext)
 	y -= 0x200;
 	z -= 0x200;
 
+	/*
+	  Linux convention:
+	  (for ABS values negative is left/up, positive is right/down)
+	*/
 	input_report_abs(wdata->extension.input, ABS_X, bx);
-	input_report_abs(wdata->extension.input, ABS_Y, by);
+	input_report_abs(wdata->extension.input, ABS_Y, -by);
 
 	input_report_abs(wdata->extension.input, ABS_RX, x);
 	input_report_abs(wdata->extension.input, ABS_RY, y);
@@ -1025,11 +1029,17 @@ enum wiimod_classic_keys {
 	WIIMOD_CLASSIC_KEY_NUM,
 };
 
+/*
+ * Linux convention:
+ * If all 4 action-buttons are present, they can be aligned in two different formations.
+ * If diamond-shaped, they are reported as BTN_NORTH, BTN_WEST, BTN_SOUTH, BTN_EAST
+ * according to their physical location.
+ */
 static const __u16 wiimod_classic_map[] = {
-	BTN_A,		/* WIIMOD_CLASSIC_KEY_A */
-	BTN_B,		/* WIIMOD_CLASSIC_KEY_B */
-	BTN_X,		/* WIIMOD_CLASSIC_KEY_X */
-	BTN_Y,		/* WIIMOD_CLASSIC_KEY_Y */
+	BTN_EAST,	/* WIIMOD_CLASSIC_KEY_A */
+	BTN_SOUTH,	/* WIIMOD_CLASSIC_KEY_B */
+	BTN_NORTH,	/* WIIMOD_CLASSIC_KEY_X */
+	BTN_WEST,	/* WIIMOD_CLASSIC_KEY_Y */
 	BTN_TL2,	/* WIIMOD_CLASSIC_KEY_ZL */
 	BTN_TR2,	/* WIIMOD_CLASSIC_KEY_ZR */
 	BTN_START,	/* WIIMOD_CLASSIC_KEY_PLUS */
@@ -1112,12 +1122,26 @@ static void wiimod_classic_in_ext(struct wiimote_data *wdata, const __u8 *ext)
 	rt <<= 1;
 	lt <<= 1;
 
-	input_report_abs(wdata->extension.input, ABS_X, lx - 0x20);
-	input_report_abs(wdata->extension.input, ABS_Y, ly - 0x20);
-	input_report_abs(wdata->extension.input, ABS_RX, rx - 0x20);
-	input_report_abs(wdata->extension.input, ABS_RY, ry - 0x20);
-	input_report_abs(wdata->extension.input, ABS_HAT0X, lt);
+	lx = lx - 0x20;
+	ly = ly - 0x20;
+	rx = rx - 0x20;
+	ry = ry - 0x20;
+
+	/*
+	  Linux convention:
+	  (for ABS values negative is left/up, positive is right/down)
+	*/
+	input_report_abs(wdata->extension.input, ABS_X, lx);
+	input_report_abs(wdata->extension.input, ABS_Y, -ly);
+	input_report_abs(wdata->extension.input, ABS_RX, rx);
+	input_report_abs(wdata->extension.input, ABS_RY, -ry);
+	/*
+	  Linux convention:
+	  Upper trigger buttons are reported as BTN_TR or ABS_HAT1X (right) and
+	  BTN_TL or ABS_HAT1Y (left).
+	*/
 	input_report_abs(wdata->extension.input, ABS_HAT1X, rt);
+	input_report_abs(wdata->extension.input, ABS_HAT1Y, lt);
 
 	input_report_key(wdata->extension.input,
 			 wiimod_classic_map[WIIMOD_CLASSIC_KEY_RIGHT],
@@ -1229,8 +1253,8 @@ static int wiimod_classic_probe(const struct wiimod_ops *ops,
 	input_set_capability(wdata->extension.input, EV_ABS, ABS_Y);
 	input_set_capability(wdata->extension.input, EV_ABS, ABS_RX);
 	input_set_capability(wdata->extension.input, EV_ABS, ABS_RX);
-	input_set_capability(wdata->extension.input, EV_ABS, ABS_HAT0X);
 	input_set_capability(wdata->extension.input, EV_ABS, ABS_HAT1X);
+	input_set_capability(wdata->extension.input, EV_ABS, ABS_HAT1Y);
 	input_set_abs_params(wdata->extension.input,
 			     ABS_X, -30, 30, 1, 1);
 	input_set_abs_params(wdata->extension.input,
@@ -1579,11 +1603,17 @@ enum wiimod_pro_keys {
 	WIIMOD_PRO_KEY_NUM,
 };
 
+/*
+ * Linux convention:
+ * If all 4 action-buttons are present, they can be aligned in two different formations.
+ * If diamond-shaped, they are reported as BTN_NORTH, BTN_WEST, BTN_SOUTH, BTN_EAST
+ * according to their physical location.
+ */
 static const __u16 wiimod_pro_map[] = {
-	BTN_A,	/* WIIMOD_PRO_KEY_A */
-	BTN_B,	/* WIIMOD_PRO_KEY_B */
-	BTN_X,	/* WIIMOD_PRO_KEY_X */
-	BTN_Y,	/* WIIMOD_PRO_KEY_Y */
+	BTN_EAST,	/* WIIMOD_PRO_KEY_A */
+	BTN_SOUTH,	/* WIIMOD_PRO_KEY_B */
+	BTN_NORTH,	/* WIIMOD_PRO_KEY_X */
+	BTN_WEST,	/* WIIMOD_PRO_KEY_Y */
 	BTN_START,	/* WIIMOD_PRO_KEY_PLUS */
 	BTN_SELECT,	/* WIIMOD_PRO_KEY_MINUS */
 	BTN_MODE,	/* WIIMOD_PRO_KEY_HOME */
