@@ -194,8 +194,12 @@ static const struct wiimod_ops wiimod_rumble = {
  */
 
 static enum power_supply_property wiimod_battery_props[] = {
+	POWER_SUPPLY_PROP_PRESENT,
 	POWER_SUPPLY_PROP_CAPACITY,
 	POWER_SUPPLY_PROP_SCOPE,
+	POWER_SUPPLY_PROP_STATUS,
+	POWER_SUPPLY_PROP_ONLINE,
+	POWER_SUPPLY_PROP_MODEL_NAME
 };
 
 static int wiimod_battery_get_property(struct power_supply *psy,
@@ -206,31 +210,46 @@ static int wiimod_battery_get_property(struct power_supply *psy,
 	int ret = 0, state;
 	unsigned long flags;
 
-	if (psp == POWER_SUPPLY_PROP_SCOPE) {
-		val->intval = POWER_SUPPLY_SCOPE_DEVICE;
-		return 0;
-	} else if (psp != POWER_SUPPLY_PROP_CAPACITY) {
-		return -EINVAL;
+	switch (psp) {
+		case POWER_SUPPLY_PROP_PRESENT:
+			val->intval = 1;
+			return 0;
+		case POWER_SUPPLY_PROP_SCOPE:
+			val->intval = POWER_SUPPLY_SCOPE_DEVICE;
+			return 0;
+		case POWER_SUPPLY_PROP_CAPACITY:
+		{
+			ret = wiimote_cmd_acquire(wdata);
+			if (ret)
+				return ret;
+
+			spin_lock_irqsave(&wdata->state.lock, flags);
+			wiimote_cmd_set(wdata, WIIPROTO_REQ_SREQ, 0);
+			wiiproto_req_status(wdata);
+			spin_unlock_irqrestore(&wdata->state.lock, flags);
+
+			wiimote_cmd_wait(wdata);
+			wiimote_cmd_release(wdata);
+
+			spin_lock_irqsave(&wdata->state.lock, flags);
+			state = wdata->state.cmd_battery;
+			spin_unlock_irqrestore(&wdata->state.lock, flags);
+
+			val->intval = state * 100 / 255;
+			return ret;
+		}
+		case POWER_SUPPLY_PROP_STATUS:
+			val->intval = POWER_SUPPLY_STATUS_DISCHARGING;
+			return 0;
+		case POWER_SUPPLY_PROP_ONLINE:
+			val->intval = 1;
+			return 0;
+		case POWER_SUPPLY_PROP_MODEL_NAME:
+			val->strval = WIIMOTE_NAME;
+			return 0;
+		default:
+			return -EINVAL;
 	}
-
-	ret = wiimote_cmd_acquire(wdata);
-	if (ret)
-		return ret;
-
-	spin_lock_irqsave(&wdata->state.lock, flags);
-	wiimote_cmd_set(wdata, WIIPROTO_REQ_SREQ, 0);
-	wiiproto_req_status(wdata);
-	spin_unlock_irqrestore(&wdata->state.lock, flags);
-
-	wiimote_cmd_wait(wdata);
-	wiimote_cmd_release(wdata);
-
-	spin_lock_irqsave(&wdata->state.lock, flags);
-	state = wdata->state.cmd_battery;
-	spin_unlock_irqrestore(&wdata->state.lock, flags);
-
-	val->intval = state * 100 / 255;
-	return ret;
 }
 
 static int wiimod_battery_probe(const struct wiimod_ops *ops,
@@ -244,8 +263,9 @@ static int wiimod_battery_probe(const struct wiimod_ops *ops,
 	wdata->battery_desc.get_property = wiimod_battery_get_property;
 	wdata->battery_desc.type = POWER_SUPPLY_TYPE_BATTERY;
 	wdata->battery_desc.use_for_apm = 0;
-	wdata->battery_desc.name = kasprintf(GFP_KERNEL, "wiimote_battery_%s",
-					     wdata->hdev->uniq);
+	wdata->battery_desc.name = devm_kasprintf(&wdata->hdev->dev, GFP_KERNEL,
+						  "wiimote_battery_%s",
+						  wdata->hdev->uniq);
 	if (!wdata->battery_desc.name)
 		return -ENOMEM;
 
@@ -262,7 +282,7 @@ static int wiimod_battery_probe(const struct wiimod_ops *ops,
 	return 0;
 
 err_free:
-	kfree(wdata->battery_desc.name);
+	devm_kfree(&wdata->hdev->dev, (void*)wdata->battery_desc.name);
 	wdata->battery_desc.name = NULL;
 	return ret;
 }
@@ -274,7 +294,7 @@ static void wiimod_battery_remove(const struct wiimod_ops *ops,
 		return;
 
 	power_supply_unregister(wdata->battery);
-	kfree(wdata->battery_desc.name);
+	devm_kfree(&wdata->hdev->dev, (void*)wdata->battery_desc.name);
 	wdata->battery_desc.name = NULL;
 }
 
@@ -347,7 +367,7 @@ static int wiimod_led_probe(const struct wiimod_ops *ops,
 	char *name;
 	int ret;
 
-	led = kzalloc(sizeof(struct led_classdev) + namesz, GFP_KERNEL);
+	led = devm_kzalloc(dev, sizeof(struct led_classdev) + namesz, GFP_KERNEL);
 	if (!led)
 		return -ENOMEM;
 
@@ -375,7 +395,7 @@ static int wiimod_led_probe(const struct wiimod_ops *ops,
 
 err_free:
 	wdata->leds[ops->arg] = NULL;
-	kfree(led);
+	devm_kfree(dev, led);
 	return ret;
 }
 
@@ -386,7 +406,7 @@ static void wiimod_led_remove(const struct wiimod_ops *ops,
 		return;
 
 	led_classdev_unregister(wdata->leds[ops->arg]);
-	kfree(wdata->leds[ops->arg]);
+	devm_kfree(&wdata->hdev->dev, wdata->leds[ops->arg]);
 	wdata->leds[ops->arg] = NULL;
 }
 

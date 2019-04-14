@@ -20,6 +20,8 @@
 #include "hid-ids.h"
 #include "hid-wiimote.h"
 
+/* TODO: replace memory allocations with device-managed allocations */
+
 /* output queue handling */
 
 static int wiimote_hid_send(struct hid_device *hdev, __u8 *buffer,
