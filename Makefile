@@ -15,6 +15,7 @@ clean:
 
 install:
 	make -C $(KDIR) M=$(PWD) modules_install
+	depmod -A
 
 replace: install
 	rm -f $(HID_DIR)/hid-wiimote.ko.xz
