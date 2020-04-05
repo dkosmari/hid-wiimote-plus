@@ -1,0 +1,59 @@
+What is this?
+=============
+
+This is a modification of the built-in Linux kernel module for Nintendo Wii
+remotes. It's a drop-in replacement for the original module.
+
+
+How is it different?
+====================
+
+1. The mapping from Wii remotes (and accessories) buttons and axes was modified
+   to respect the Linux kernel conventions, and behave like gamepads, instead of
+   a mixture of gamepad and keyboard.
+
+  - D-pad buttons are mapped to BTN_DPAD_* events, instead of keyboard arrow keys.
+  - Buttons +/Start and -/Select are mapped to BTN_START and BTN_SELECT.
+  - Face/action buttons are mapped to east, south, north, west buttons.
+
+2. Better battery status reporting is implemented too, to make it interact more
+   nicely with desktop environments.
+
+3. Memory allocation is done in the module's scope, so it's guaranteed to be
+   released when the module unloads.
+
+4. Accelerometer and gyro devices register proper metadata
+   (INPUT_PROP_ACCELEROMETER and correct units.)
+
+5. Sticks (Nunchuk and Classic Controller) don't invert the Y axis anymore.
+   Positive values mean "down."
+
+6. TODO: handle triggers for Classic Controller properly.
+
+7. Balance Board reports its sensors as HAT0X, HAT1X, HAT2X, HAT3X; that is,
+   four 1-D axes instead of two 2-D axes.
+
+TODO: check if Pro Controller doesn't have inverted Y axes.
+
+
+How to compile?
+===============
+
+You'll need the kernel headers in your system, in /lib/modules/*
+
+Use the commands:
+
+    make
+    sudo -E make replace
+
+This will remove read permissions from the original hid-wiimote.ko* module,
+disabling it.
+
+To avoid disabling the original module, use this instead:
+
+    make
+    sudo -E make install
+
+But notice you'll have to manually unload the original module with rmmod, then
+manually load this custom module with insmod. The custom hid-wiimote.ko will
+be located in the /lib/modules/*/extra/.

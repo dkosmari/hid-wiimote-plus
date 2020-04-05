@@ -1001,6 +1001,18 @@ static int wiimod_nunchuk_probe(const struct wiimod_ops *ops,
 			     ABS_RY, -500, 500, 2, 4);
 	input_set_abs_params(wdata->extension.input,
 			     ABS_RZ, -500, 500, 2, 4);
+	/*
+	  Linux convention:
+	  When INPUT_PROP_ACCELEROMETER is set the resolution changes.
+	  The main axes (ABS_X, ABS_Y, ABS_Z) are then reported in
+	  in units per g (units/g).
+	  Since the primary axes are taken by the stick, we report
+	  the accelerometer on the secondary axes.
+	 */
+	input_abs_set_res(wdata->extension.input, ABS_RX, 100);
+	input_abs_set_res(wdata->extension.input, ABS_RY, 100);
+	input_abs_set_res(wdata->extension.input, ABS_RZ, 100);
+	set_bit(INPUT_PROP_ACCELEROMETER, wdata->extension.input->propbit);
 
 	ret = input_register_device(wdata->extension.input);
 	if (ret)
@@ -1170,7 +1182,13 @@ static void wiimod_classic_in_ext(struct wiimote_data *wdata, const __u8 *ext)
 	  Upper trigger buttons are reported as BTN_TR or ABS_HAT1X (right) and
 	  BTN_TL or ABS_HAT1Y (left).
 	*/
-        /* They're digital buttons, so no ABS values are reported. */
+	/*
+	  TODO: only report hats for Classic Controller, the Pro version doesn't have
+	  analog triggers, only digital.
+	 */
+	input_report_abs(wdata->extension.input, ABS_HAT1X, rt);
+	input_report_abs(wdata->extension.input, ABS_HAT1Y, lt);
+
 
 	input_report_key(wdata->extension.input,
 			 wiimod_classic_map[WIIMOD_CLASSIC_KEY_RIGHT],
@@ -1291,7 +1309,14 @@ static int wiimod_classic_probe(const struct wiimod_ops *ops,
 			     ABS_RX, -30, 30, 1, 1);
 	input_set_abs_params(wdata->extension.input,
 			     ABS_RY, -30, 30, 1, 1);
-        /* Triggers are digital, not analog, so we don't report ABS values. */
+	/*
+	   TODO: only report hats when it's a Classic Controller (not Pro)
+	 */
+	input_set_abs_params(wdata->extension.input,
+			     ABS_HAT1X, -30, 30, 1, 1);
+	input_set_abs_params(wdata->extension.input,
+			     ABS_HAT1Y, -30, 30, 1, 1);
+
 	ret = input_register_device(wdata->extension.input);
 	if (ret)
 		goto err_free;
