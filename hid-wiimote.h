@@ -373,4 +373,3 @@ static inline int wiimote_cmd_wait_noint(struct wiimote_data *wdata)
 }
 
 #endif
-

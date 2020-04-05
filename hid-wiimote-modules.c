@@ -279,7 +279,7 @@ static int wiimod_battery_probe(const struct wiimod_ops *ops,
 	return 0;
 
 err_free:
-	devm_kfree(&wdata->hdev->dev, (void*)wdata->battery_desc.name);
+	devm_kfree(&wdata->hdev->dev, wdata->battery_desc.name);
 	wdata->battery_desc.name = NULL;
 	return ret;
 }
@@ -291,7 +291,7 @@ static void wiimod_battery_remove(const struct wiimod_ops *ops,
 		return;
 
 	power_supply_unregister(wdata->battery);
-	devm_kfree(&wdata->hdev->dev, (void*)wdata->battery_desc.name);
+	devm_kfree(&wdata->hdev->dev, wdata->battery_desc.name);
 	wdata->battery_desc.name = NULL;
 }
 
@@ -1170,10 +1170,7 @@ static void wiimod_classic_in_ext(struct wiimote_data *wdata, const __u8 *ext)
 	  Upper trigger buttons are reported as BTN_TR or ABS_HAT1X (right) and
 	  BTN_TL or ABS_HAT1Y (left).
 	*/
-        /* They're digital buttons.
-	input_report_abs(wdata->extension.input, ABS_HAT1X, rt);
-	input_report_abs(wdata->extension.input, ABS_HAT1Y, lt);
-        */
+        /* They're digital buttons, so no ABS values are reported. */
 
 	input_report_key(wdata->extension.input,
 			 wiimod_classic_map[WIIMOD_CLASSIC_KEY_RIGHT],
@@ -1285,10 +1282,7 @@ static int wiimod_classic_probe(const struct wiimod_ops *ops,
 	input_set_capability(wdata->extension.input, EV_ABS, ABS_Y);
 	input_set_capability(wdata->extension.input, EV_ABS, ABS_RX);
 	input_set_capability(wdata->extension.input, EV_ABS, ABS_RX);
-        /* Triggers are discrete, not analog
-	input_set_capability(wdata->extension.input, EV_ABS, ABS_HAT1X);
-	input_set_capability(wdata->extension.input, EV_ABS, ABS_HAT1Y);*
-        */
+	/* Triggers are digital, not analog, so we don't report ABS values. */
 	input_set_abs_params(wdata->extension.input,
 			     ABS_X, -30, 30, 1, 1);
 	input_set_abs_params(wdata->extension.input,
@@ -1297,12 +1291,7 @@ static int wiimod_classic_probe(const struct wiimod_ops *ops,
 			     ABS_RX, -30, 30, 1, 1);
 	input_set_abs_params(wdata->extension.input,
 			     ABS_RY, -30, 30, 1, 1);
-        /* Triggers are discrete, not analog
-	input_set_abs_params(wdata->extension.input,
-			     ABS_HAT0X, -30, 30, 1, 1);
-	input_set_abs_params(wdata->extension.input,
-			     ABS_HAT1X, -30, 30, 1, 1);
-        */
+        /* Triggers are digital, not analog, so we don't report ABS values. */
 	ret = input_register_device(wdata->extension.input);
 	if (ret)
 		goto err_free;
