@@ -87,7 +87,8 @@ static void wiimod_keys_in_keys(struct wiimote_data *wdata, const __u8 *keys)
 }
 
 static int wiimod_keys_probe(const struct wiimod_ops *ops,
-			     struct wiimote_data *wdata)
+			     struct wiimote_data *wdata,
+			     unsigned int ext)
 {
 	unsigned int i;
 
@@ -152,7 +153,8 @@ static int wiimod_rumble_play(struct input_dev *dev, void *data,
 }
 
 static int wiimod_rumble_probe(const struct wiimod_ops *ops,
-			       struct wiimote_data *wdata)
+			       struct wiimote_data *wdata,
+			       unsigned int ext)
 {
 	INIT_WORK(&wdata->rumble_worker, wiimod_rumble_worker);
 
@@ -250,7 +252,8 @@ static int wiimod_battery_get_property(struct power_supply *psy,
 }
 
 static int wiimod_battery_probe(const struct wiimod_ops *ops,
-				struct wiimote_data *wdata)
+				struct wiimote_data *wdata,
+				unsigned int ext)
 {
 	struct power_supply_config psy_cfg = { .drv_data = wdata, };
 	int ret;
@@ -355,7 +358,8 @@ static void wiimod_led_set(struct led_classdev *led_dev,
 }
 
 static int wiimod_led_probe(const struct wiimod_ops *ops,
-			    struct wiimote_data *wdata)
+			    struct wiimote_data *wdata,
+			    unsigned int ext)
 {
 	struct device *dev = &wdata->hdev->dev;
 	size_t namesz = strlen(dev_name(dev)) + 9;
@@ -503,7 +507,8 @@ static void wiimod_accel_close(struct input_dev *dev)
 }
 
 static int wiimod_accel_probe(const struct wiimod_ops *ops,
-			      struct wiimote_data *wdata)
+			      struct wiimote_data *wdata,
+    			      unsigned int ext)
 {
 	int ret;
 
@@ -765,7 +770,8 @@ static void wiimod_ir_close(struct input_dev *dev)
 }
 
 static int wiimod_ir_probe(const struct wiimod_ops *ops,
-			   struct wiimote_data *wdata)
+			   struct wiimote_data *wdata,
+			   unsigned int ext)
 {
 	/* TODO: use MT protocol? */
 	int ret;
@@ -964,7 +970,8 @@ static void wiimod_nunchuk_close(struct input_dev *dev)
 }
 
 static int wiimod_nunchuk_probe(const struct wiimod_ops *ops,
-				struct wiimote_data *wdata)
+				struct wiimote_data *wdata,
+				unsigned int ext)
 {
 	int ret, i;
 
@@ -992,6 +999,8 @@ static int wiimod_nunchuk_probe(const struct wiimod_ops *ops,
 			     ABS_X, -120, 120, 2, 4);
 	input_set_abs_params(wdata->extension.input,
 			     ABS_Y, -120, 120, 2, 4);
+	/* set accelerometer properties */
+	set_bit(INPUT_PROP_ACCELEROMETER, wdata->extension.input->propbit);
 	input_set_capability(wdata->extension.input, EV_ABS, ABS_RX);
 	input_set_capability(wdata->extension.input, EV_ABS, ABS_RY);
 	input_set_capability(wdata->extension.input, EV_ABS, ABS_RZ);
@@ -1001,18 +1010,10 @@ static int wiimod_nunchuk_probe(const struct wiimod_ops *ops,
 			     ABS_RY, -500, 500, 2, 4);
 	input_set_abs_params(wdata->extension.input,
 			     ABS_RZ, -500, 500, 2, 4);
-	/*
-	  Linux convention:
-	  When INPUT_PROP_ACCELEROMETER is set the resolution changes.
-	  The main axes (ABS_X, ABS_Y, ABS_Z) are then reported in
-	  in units per g (units/g).
-	  Since the primary axes are taken by the stick, we report
-	  the accelerometer on the secondary axes.
-	 */
+	/* set resolution for accelerometers: 100 = 1 g */
 	input_abs_set_res(wdata->extension.input, ABS_RX, 100);
 	input_abs_set_res(wdata->extension.input, ABS_RY, 100);
 	input_abs_set_res(wdata->extension.input, ABS_RZ, 100);
-	set_bit(INPUT_PROP_ACCELEROMETER, wdata->extension.input->propbit);
 
 	ret = input_register_device(wdata->extension.input);
 	if (ret)
@@ -1050,6 +1051,9 @@ static const struct wiimod_ops wiimod_nunchuk = {
  * gamecube-like controller that can be hotplugged on the Wii Remote.
  * It has several hardware buttons and switches that are all reported via
  * a normal extension device.
+ *
+ * Note that the Classic Controller Pro lacks the analog L/R shoulder buttons,
+ * it only has digital buttons.
  */
 
 enum wiimod_classic_keys {
@@ -1071,12 +1075,6 @@ enum wiimod_classic_keys {
 	WIIMOD_CLASSIC_KEY_NUM,
 };
 
-/*
- * Linux convention:
- * If all 4 action-buttons are present, they can be aligned in two different formations.
- * If diamond-shaped, they are reported as BTN_NORTH, BTN_WEST, BTN_SOUTH, BTN_EAST
- * according to their physical location.
- */
 static const __u16 wiimod_classic_map[] = {
 	BTN_EAST,	/* WIIMOD_CLASSIC_KEY_A */
 	BTN_SOUTH,	/* WIIMOD_CLASSIC_KEY_B */
@@ -1169,26 +1167,16 @@ static void wiimod_classic_in_ext(struct wiimote_data *wdata, const __u8 *ext)
 	rx = rx - 0x20;
 	ry = ry - 0x20;
 
-	/*
-	  Linux convention:
-	  (for ABS values negative is left/up, positive is right/down)
-	*/
 	input_report_abs(wdata->extension.input, ABS_X, lx);
 	input_report_abs(wdata->extension.input, ABS_Y, -ly);
 	input_report_abs(wdata->extension.input, ABS_RX, rx);
 	input_report_abs(wdata->extension.input, ABS_RY, -ry);
-	/*
-	  Linux convention:
-	  Upper trigger buttons are reported as BTN_TR or ABS_HAT1X (right) and
-	  BTN_TL or ABS_HAT1Y (left).
-	*/
-	/*
-	  TODO: only report hats for Classic Controller, the Pro version doesn't have
-	  analog triggers, only digital.
-	 */
-	input_report_abs(wdata->extension.input, ABS_HAT1X, rt);
-	input_report_abs(wdata->extension.input, ABS_HAT1Y, lt);
 
+	if (wdata->state.exttype == WIIMOTE_EXT_CLASSIC_CONTROLLER) {
+		/*Only Classic Controller has analog L/R. */
+		input_report_abs(wdata->extension.input, ABS_HAT1X, rt);
+		input_report_abs(wdata->extension.input, ABS_HAT1Y, lt);
+	}
 
 	input_report_key(wdata->extension.input,
 			 wiimod_classic_map[WIIMOD_CLASSIC_KEY_RIGHT],
@@ -1274,7 +1262,8 @@ static void wiimod_classic_close(struct input_dev *dev)
 }
 
 static int wiimod_classic_probe(const struct wiimod_ops *ops,
-				struct wiimote_data *wdata)
+				struct wiimote_data *wdata,
+				unsigned int ext)
 {
 	int ret, i;
 
@@ -1290,7 +1279,10 @@ static int wiimod_classic_probe(const struct wiimod_ops *ops,
 	wdata->extension.input->id.vendor = wdata->hdev->vendor;
 	wdata->extension.input->id.product = wdata->hdev->product;
 	wdata->extension.input->id.version = wdata->hdev->version;
-	wdata->extension.input->name = WIIMOTE_NAME " Classic Controller";
+	if (ext == WIIMOTE_EXT_CLASSIC_CONTROLLER_PRO)
+		wdata->extension.input->name = WIIMOTE_NAME " Classic Controller Pro";
+	else
+		wdata->extension.input->name = WIIMOTE_NAME " Classic Controller";
 
 	for (i = 0; i < WIIMOD_CLASSIC_KEY_NUM; ++i)
 		input_set_capability(wdata->extension.input,
@@ -1309,14 +1301,15 @@ static int wiimod_classic_probe(const struct wiimod_ops *ops,
 			     ABS_RX, -30, 30, 1, 1);
 	input_set_abs_params(wdata->extension.input,
 			     ABS_RY, -30, 30, 1, 1);
-	/*
-	   TODO: only report hats when it's a Classic Controller (not Pro)
-	 */
-	input_set_abs_params(wdata->extension.input,
-			     ABS_HAT1X, -30, 30, 1, 1);
-	input_set_abs_params(wdata->extension.input,
-			     ABS_HAT1Y, -30, 30, 1, 1);
 
+	if (ext == WIIMOTE_EXT_CLASSIC_CONTROLLER) {
+		/* Only Classic Controller has analog L/R. */
+		input_set_abs_params(wdata->extension.input,
+				     ABS_HAT1X, -30, 30, 1, 1);
+		input_set_abs_params(wdata->extension.input,
+				     ABS_HAT1Y, -30, 30, 1, 1);
+	}
+        
 	ret = input_register_device(wdata->extension.input);
 	if (ret)
 		goto err_free;
@@ -1519,7 +1512,8 @@ static ssize_t wiimod_bboard_calib_show(struct device *dev,
 static DEVICE_ATTR(bboard_calib, S_IRUGO, wiimod_bboard_calib_show, NULL);
 
 static int wiimod_bboard_probe(const struct wiimod_ops *ops,
-			       struct wiimote_data *wdata)
+			       struct wiimote_data *wdata,
+			       unsigned int ext)
 {
 	int ret, i, j;
 	__u8 buf[24], offs;
@@ -1918,7 +1912,8 @@ static DEVICE_ATTR(pro_calib, S_IRUGO|S_IWUSR|S_IWGRP, wiimod_pro_calib_show,
 		   wiimod_pro_calib_store);
 
 static int wiimod_pro_probe(const struct wiimod_ops *ops,
-			    struct wiimote_data *wdata)
+			    struct wiimote_data *wdata,
+			    unsigned int ext)
 {
 	int ret, i;
 	unsigned long flags;
@@ -2162,7 +2157,8 @@ static void wiimod_drums_close(struct input_dev *dev)
 }
 
 static int wiimod_drums_probe(const struct wiimod_ops *ops,
-			      struct wiimote_data *wdata)
+			      struct wiimote_data *wdata,
+			      unsigned int ext)
 {
 	int ret;
 
@@ -2392,7 +2388,8 @@ static void wiimod_guitar_close(struct input_dev *dev)
 }
 
 static int wiimod_guitar_probe(const struct wiimod_ops *ops,
-			       struct wiimote_data *wdata)
+			       struct wiimote_data *wdata,
+			       unsigned int ext)
 {
 	int ret, i;
 
@@ -2467,7 +2464,8 @@ static const struct wiimod_ops wiimod_guitar = {
  */
 
 static int wiimod_builtin_mp_probe(const struct wiimod_ops *ops,
-				   struct wiimote_data *wdata)
+				   struct wiimote_data *wdata,
+				   unsigned int ext)
 {
 	unsigned long flags;
 
@@ -2503,7 +2501,8 @@ static const struct wiimod_ops wiimod_builtin_mp = {
  */
 
 static int wiimod_no_mp_probe(const struct wiimod_ops *ops,
-			      struct wiimote_data *wdata)
+			      struct wiimote_data *wdata,
+			      unsigned int ext)
 {
 	unsigned long flags;
 
@@ -2627,7 +2626,8 @@ static void wiimod_mp_close(struct input_dev *dev)
 }
 
 static int wiimod_mp_probe(const struct wiimod_ops *ops,
-			   struct wiimote_data *wdata)
+			   struct wiimote_data *wdata,
+			   unsigned int ext)
 {
 	int ret;
 
@@ -2720,6 +2720,7 @@ const struct wiimod_ops *wiimod_ext_table[WIIMOTE_EXT_NUM] = {
 	[WIIMOTE_EXT_UNKNOWN] = &wiimod_dummy,
 	[WIIMOTE_EXT_NUNCHUK] = &wiimod_nunchuk,
 	[WIIMOTE_EXT_CLASSIC_CONTROLLER] = &wiimod_classic,
+	[WIIMOTE_EXT_CLASSIC_CONTROLLER_PRO] = &wiimod_classic,
 	[WIIMOTE_EXT_BALANCE_BOARD] = &wiimod_bboard,
 	[WIIMOTE_EXT_PRO_CONTROLLER] = &wiimod_pro,
 	[WIIMOTE_EXT_DRUMS] = &wiimod_drums,

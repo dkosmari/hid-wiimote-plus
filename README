@@ -10,11 +10,13 @@ How is it different?
 
 1. The mapping from Wii remotes (and accessories) buttons and axes was modified
    to respect the Linux kernel conventions, and behave like gamepads, instead of
-   a mixture of gamepad and keyboard.
+   a mixture of gamepad and keyboard. For convenience, "gamepad.rst" from the
+   Linux docs is included here.
 
-  - D-pad buttons are mapped to BTN_DPAD_* events, instead of keyboard arrow keys.
-  - Buttons +/Start and -/Select are mapped to BTN_START and BTN_SELECT.
-  - Face/action buttons are mapped to east, south, north, west buttons.
+  - D-pad buttons are now mapped to BTN_DPAD_* events, instead of keyboard arrow
+    keys.
+  - Buttons +/Start and -/Select are now mapped to BTN_START and BTN_SELECT.
+  - Face/action buttons are now mapped to east, south, north, west buttons.
 
 2. Better battery status reporting is implemented too, to make it interact more
    nicely with desktop environments.
@@ -28,12 +30,11 @@ How is it different?
 5. Sticks (Nunchuk and Classic Controller) don't invert the Y axis anymore.
    Positive values mean "down."
 
-6. TODO: handle triggers for Classic Controller properly.
+6. Classic Controller Pro no longer reports analog shoulder buttons, only the
+   Classic Controller (not Pro) has them.
 
 7. Balance Board reports its sensors as HAT0X, HAT1X, HAT2X, HAT3X; that is,
    four 1-D axes instead of two 2-D axes.
-
-TODO: check if Pro Controller doesn't have inverted Y axes.
 
 
 How to compile?
@@ -44,16 +45,19 @@ You'll need the kernel headers in your system, in /lib/modules/*
 Use the commands:
 
     make
-    sudo -E make replace
-
-This will remove read permissions from the original hid-wiimote.ko* module,
-disabling it.
-
-To avoid disabling the original module, use this instead:
-
-    make
     sudo -E make install
 
-But notice you'll have to manually unload the original module with rmmod, then
-manually load this custom module with insmod. The custom hid-wiimote.ko will
-be located in the /lib/modules/*/extra/.
+This will rename the original module, adding a ".backup" extension, to disable
+it from loading.
+
+To uninstall, use:
+
+    sudo -E make uninstall
+
+
+If you just want to test it, without installing it, use these commands instead:
+
+    make
+    sudo rmmod hid-wiimote
+    sudo insmod ./hid-wiimote.ko
+

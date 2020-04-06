@@ -446,8 +446,10 @@ static __u8 wiimote_cmd_read_ext(struct wiimote_data *wdata, __u8 *rmem)
 
 	if (rmem[4] == 0x00 && rmem[5] == 0x00)
 		return WIIMOTE_EXT_NUNCHUK;
-	if (rmem[4] == 0x01 && rmem[5] == 0x01)
+	if (rmem[0] == 0x00 && rmem[4] == 0x01 && rmem[5] == 0x01)
 		return WIIMOTE_EXT_CLASSIC_CONTROLLER;
+	if (rmem[0] == 0x01 && rmem[4] == 0x01 && rmem[5] == 0x01)
+		return WIIMOTE_EXT_CLASSIC_CONTROLLER_PRO;        
 	if (rmem[4] == 0x04 && rmem[5] == 0x02)
 		return WIIMOTE_EXT_BALANCE_BOARD;
 	if (rmem[4] == 0x01 && rmem[5] == 0x20)
@@ -491,6 +493,7 @@ static bool wiimote_cmd_map_mp(struct wiimote_data *wdata, __u8 exttype)
 	/* map MP with correct pass-through mode */
 	switch (exttype) {
 	case WIIMOTE_EXT_CLASSIC_CONTROLLER:
+	case WIIMOTE_EXT_CLASSIC_CONTROLLER_PRO:
 	case WIIMOTE_EXT_DRUMS:
 	case WIIMOTE_EXT_GUITAR:
 		wmem = 0x07;
@@ -653,7 +656,7 @@ static void wiimote_modules_load(struct wiimote_data *wdata,
 		if (!ops->probe)
 			continue;
 
-		ret = ops->probe(ops, wdata);
+		ret = ops->probe(ops, wdata, WIIMOTE_EXT_NONE);
 		if (ret)
 			goto error;
 	}
@@ -726,7 +729,7 @@ static void wiimote_ext_load(struct wiimote_data *wdata, unsigned int ext)
 	ops = wiimod_ext_table[ext];
 
 	if (ops->probe) {
-		ret = ops->probe(ops, wdata);
+		ret = ops->probe(ops, wdata, ext);
 		if (ret)
 			ext = WIIMOTE_EXT_UNKNOWN;
 	}
@@ -761,7 +764,7 @@ static void wiimote_mp_load(struct wiimote_data *wdata)
 
 	ops = &wiimod_mp;
 	if (ops->probe) {
-		ret = ops->probe(ops, wdata);
+		ret = ops->probe(ops, wdata, WIIMOTE_EXT_NONE);
 		if (ret)
 			mode = 1;
 	}
@@ -1078,6 +1081,7 @@ static const char *wiimote_exttype_names[WIIMOTE_EXT_NUM] = {
 	[WIIMOTE_EXT_UNKNOWN] = "Unknown",
 	[WIIMOTE_EXT_NUNCHUK] = "Nintendo Wii Nunchuk",
 	[WIIMOTE_EXT_CLASSIC_CONTROLLER] = "Nintendo Wii Classic Controller",
+	[WIIMOTE_EXT_CLASSIC_CONTROLLER_PRO] = "Nintendo Wii Classic Controller Pro",
 	[WIIMOTE_EXT_BALANCE_BOARD] = "Nintendo Wii Balance Board",
 	[WIIMOTE_EXT_PRO_CONTROLLER] = "Nintendo Wii U Pro Controller",
 	[WIIMOTE_EXT_DRUMS] = "Nintendo Wii Drums",
@@ -1663,6 +1667,8 @@ static ssize_t wiimote_ext_show(struct device *dev,
 		return sprintf(buf, "nunchuk\n");
 	case WIIMOTE_EXT_CLASSIC_CONTROLLER:
 		return sprintf(buf, "classic\n");
+	case WIIMOTE_EXT_CLASSIC_CONTROLLER_PRO:
+		return sprintf(buf, "classic pro\n");
 	case WIIMOTE_EXT_BALANCE_BOARD:
 		return sprintf(buf, "balanceboard\n");
 	case WIIMOTE_EXT_PRO_CONTROLLER:

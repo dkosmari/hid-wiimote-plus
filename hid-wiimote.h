@@ -84,6 +84,7 @@ enum wiimote_exttype {
 	WIIMOTE_EXT_UNKNOWN,
 	WIIMOTE_EXT_NUNCHUK,
 	WIIMOTE_EXT_CLASSIC_CONTROLLER,
+	WIIMOTE_EXT_CLASSIC_CONTROLLER_PRO,
 	WIIMOTE_EXT_BALANCE_BOARD,
 	WIIMOTE_EXT_PRO_CONTROLLER,
 	WIIMOTE_EXT_DRUMS,
@@ -188,7 +189,8 @@ struct wiimod_ops {
 	__u16 flags;
 	unsigned long arg;
 	int (*probe) (const struct wiimod_ops *ops,
-		      struct wiimote_data *wdata);
+		      struct wiimote_data *wdata,
+		      unsigned int ext);
 	void (*remove) (const struct wiimod_ops *ops,
 			struct wiimote_data *wdata);
 
