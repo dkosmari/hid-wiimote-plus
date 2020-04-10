@@ -30,8 +30,9 @@ How is it different?
 5. Sticks (Nunchuk and Classic Controller) don't invert the Y axis anymore.
    Positive values mean "down."
 
-6. Classic Controller Pro no longer reports analog shoulder buttons, only the
-   Classic Controller (not Pro) has them.
+6. Classic Controller Pro no longer reports analog shoulder buttons (L/R), only
+   the Classic Controller (not Pro) has them. Range for analog shoulder buttons
+   has been corrected from [-30,+30] to [0,+60].
 
 7. Balance Board reports its sensors as HAT0X, HAT1X, HAT2X, HAT3X; that is,
    four 1-D axes instead of two 2-D axes.

@@ -1305,9 +1305,9 @@ static int wiimod_classic_probe(const struct wiimod_ops *ops,
 	if (ext == WIIMOTE_EXT_CLASSIC_CONTROLLER) {
 		/* Only Classic Controller has analog L/R. */
 		input_set_abs_params(wdata->extension.input,
-				     ABS_HAT1X, -30, 30, 1, 1);
+				     ABS_HAT1X, 0, 60, 1, 1);
 		input_set_abs_params(wdata->extension.input,
-				     ABS_HAT1Y, -30, 30, 1, 1);
+				     ABS_HAT1Y, 0, 60, 1, 1);
 	}
         
 	ret = input_register_device(wdata->extension.input);

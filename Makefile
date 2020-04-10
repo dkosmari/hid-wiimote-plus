@@ -1,5 +1,5 @@
 PACKAGE := hid-wiimote
-VERSION := 0.6
+VERSION := 0.7
 DISTDIR := $(PACKAGE)-$(VERSION)
 
 FILES := \
