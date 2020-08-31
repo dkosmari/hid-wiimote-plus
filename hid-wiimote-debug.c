@@ -14,6 +14,8 @@
 #include <linux/uaccess.h>
 #include "hid-wiimote.h"
 
+#ifdef CONFIG_DEBUG_FS
+
 struct wiimote_debug {
 	struct wiimote_data *wdata;
 	struct dentry *eeprom;
@@ -220,3 +222,5 @@ void wiidebug_deinit(struct wiimote_data *wdata)
 	debugfs_remove(dbg->eeprom);
 	kfree(dbg);
 }
+
+#endif
