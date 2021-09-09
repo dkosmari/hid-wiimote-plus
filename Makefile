@@ -1,61 +1,90 @@
 PACKAGE := hid-wiimote
+
 VERSION := 0.7
+
 DISTDIR := $(PACKAGE)-$(VERSION)
 
-FILES := \
+DISTFILES := \
+	gamepad.rst \
 	hid-ids.h \
-	hid-wiimote.h \
 	hid-wiimote-core.c \
 	hid-wiimote-debug.c \
-	hid-wiimote-modules.c
+	hid-wiimote-modules.c \
+	hid-wiimote.h \
+	Kbuild \
+	Makefile \
+	README
 
-obj-m += hid-wiimote.o
-hid-wiimote-objs += hid-wiimote-core.o hid-wiimote-debug.o hid-wiimote-modules.o
 
-KERNEL_VERSION := $(shell uname -r)
+KVERSION := $(shell uname -r)
 
-KDIR := /lib/modules/$(KERNEL_VERSION)/build
+KBASE := /lib/modules/$(KVERSION)
 
-INSTALL_MOD_DIR := kernel/drivers/hid
+KDIR ?= $(KBASE)/build
 
-HID_DIR := /lib/modules/$(KERNEL_VERSION)/kernel/drivers/hid
-
-ORIGINAL_MODULE_PATH := $(wildcard $(HID_DIR)/hid-wiimote.ko*)
-ifeq (,$(wildcard $(ORIGINAL_MODULE_PATH)))
-	$(warning "Original module not found.")
-endif
-ifeq ($(suffix $(ORIGINAL_MODULE_PATH)),.backup)
-	ORIGINAL_MODULE_PATH := $(ORIGINAL_MODULE_PATH:.backup=)
+ORIGINAL_MODULE := $(wildcard $(KBASE)/kernel/drivers/hid/hid-wiimote.ko*)
+ifeq ($(suffix $(ORIGINAL_MODULE)),.backup)
+	ORIGINAL_MODULE := $(ORIGINAL_MODULE:.backup=)
 endif
 
-BACKUP_MODULE_PATH := $(ORIGINAL_MODULE_PATH).backup
+BACKUP_MODULE := $(ORIGINAL_MODULE).backup
 
-NEW_MODULE_PATH := /lib/modules/$(KERNEL_VERSION)/extra/hid-wiimote.ko
+NEW_MODULE := $(wildcard $(KBASE)/extra/hid-wiimote.ko*)
 
 
-.PHONY: all clean install replace dist
+ifneq (,$(wildcard $(ORIGINAL_MODULE)))
+FOUND_ORIGINAL := yes
+endif
 
-all:
+ifneq (,$(wildcard $(BACKUP_MODULE)))
+FOUND_BACKUP := yes
+endif
+
+ifneq (,$(NEW_MODULE))
+FOUND_NEW := yes
+endif
+
+
+
+.PHONY: default clean install uninstall dist
+
+
+default:
 	make -C $(KDIR) M=$(PWD) modules
+
 
 clean:
 	make -C $(KDIR) M=$(PWD) clean
 	$(RM) -r $(DISTDIR)
 
+
 install:
+ifeq ($(FOUND_ORIGINAL),yes)
+	$(info Creating backup.)
+	mv $(ORIGINAL_MODULE) $(BACKUP_MODULE)
+else
+	$(warning There is no original file to backup.)
+endif
 	make -C $(KDIR) M=$(PWD) modules_install
-	-( test -n "$(ORIGINAL_MODULE_PATH)" && \
-		mv $(ORIGINAL_MODULE_PATH) $(BACKUP_MODULE_PATH) )
 	depmod -A
 
+
 uninstall:
-	-$(RM) $(NEW_MODULE_PATH)
-	-( test -n "$(ORIGINAL_MODULE_PATH)" && \
-		mv $(BACKUP_MODULE_PATH) $(ORIGINAL_MODULE_PATH) )
+ifeq ($(FOUND_NEW),yes)
+	-$(RM) $(NEW_MODULE)
+endif
+ifeq ($(FOUND_BACKUP),yes)
+	$(info Restoring backup.)
+	mv $(BACKUP_MODULE) $(ORIGINAL_MODULE)
+else
+	$(warning No backup found to restore.)
+	$(warning You may need to reinstall the kernel package to restore it.)
+endif
 	depmod -A
+
 
 dist:
 	mkdir -p $(DISTDIR)
-	cp Makefile README gamepad.rst $(FILES) $(DISTDIR)/
+	cp $(DISTFILES) $(DISTDIR)/
 	tar -c -z -f $(DISTDIR).tar.gz $(DISTDIR)
 	$(RM) -r $(DISTDIR)
