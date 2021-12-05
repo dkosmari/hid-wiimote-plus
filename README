@@ -41,19 +41,19 @@ How is it different?
 How to compile?
 ===============
 
-You'll need the kernel headers in your system, in /lib/modules/*
+You'll need the kernel development headers in your system.
 
 Use the commands:
 
     make
-    sudo -E make install
+    sudo make install
 
 This will rename the original module, adding a ".backup" extension, to disable
 it from loading.
 
 To uninstall, use:
 
-    sudo -E make uninstall
+    sudo make uninstall
 
 
 If you just want to test it, without installing it, use these commands instead:
