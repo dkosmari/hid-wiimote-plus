@@ -22,6 +22,9 @@ KBASE := /lib/modules/$(KVERSION)
 
 KDIR ?= $(KBASE)/build
 
+MODDIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
+
+
 ORIGINAL_MODULE := $(wildcard $(KBASE)/kernel/drivers/hid/hid-wiimote.ko*)
 ifeq ($(suffix $(ORIGINAL_MODULE)),.backup)
 	ORIGINAL_MODULE := $(ORIGINAL_MODULE:.backup=)
@@ -50,11 +53,12 @@ endif
 
 
 default:
-	make -C $(KDIR) M=$(PWD) modules
+	make -C $(KDIR) M=$(MODDIR)
 
 
 clean:
-	make -C $(KDIR) M=$(PWD) clean
+	$(info cleaning up)
+	make -C $(KDIR) M=$(MODDIR) clean
 	$(RM) -r $(DISTDIR)
 
 
@@ -65,7 +69,7 @@ ifeq ($(FOUND_ORIGINAL),yes)
 else
 	$(warning There is no original file to backup.)
 endif
-	make -C $(KDIR) M=$(PWD) modules_install
+	make -C $(KDIR) M=$(MODDIR) modules_install
 	depmod -A
 
 
