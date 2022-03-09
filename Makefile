@@ -5,6 +5,7 @@ VERSION := 0.7
 DISTDIR := $(PACKAGE)-$(VERSION)
 
 DISTFILES := \
+	dkms.conf \
 	gamepad.rst \
 	hid-ids.h \
 	hid-wiimote-core.c \
@@ -16,75 +17,27 @@ DISTFILES := \
 	README
 
 
-KVERSION := $(shell uname -r)
+KDIR ?= /lib/modules/$(shell uname -r)/build
+SRCTREE ?= /usr/src
 
-KBASE := /lib/modules/$(KVERSION)
-
-KDIR ?= $(KBASE)/build
-
-MODDIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
+SRCDIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 
 
-ORIGINAL_MODULE := $(wildcard $(KBASE)/kernel/drivers/hid/hid-wiimote.ko*)
-ifeq ($(suffix $(ORIGINAL_MODULE)),.backup)
-	ORIGINAL_MODULE := $(ORIGINAL_MODULE:.backup=)
-endif
-
-BACKUP_MODULE := $(ORIGINAL_MODULE).backup
-
-NEW_MODULE := $(wildcard $(KBASE)/extra/hid-wiimote.ko*)
-
-
-ifneq (,$(wildcard $(ORIGINAL_MODULE)))
-FOUND_ORIGINAL := yes
-endif
-
-ifneq (,$(wildcard $(BACKUP_MODULE)))
-FOUND_BACKUP := yes
-endif
-
-ifneq (,$(NEW_MODULE))
-FOUND_NEW := yes
-endif
-
-
-
-.PHONY: default clean install uninstall dist
+.PHONY: default build clean dist install uninstall
 
 
 default:
-	make -C $(KDIR) M=$(MODDIR)
+	$(info Run `make install` or `make uninstall` as root.)
+
+
+build:
+	make -C $(KDIR) M=$(SRCDIR)
 
 
 clean:
 	$(info cleaning up)
-	make -C $(KDIR) M=$(MODDIR) clean
+	make -C $(KDIR) M=$(SRCDIR) clean
 	$(RM) -r $(DISTDIR)
-
-
-install:
-ifeq ($(FOUND_ORIGINAL),yes)
-	$(info Creating backup.)
-	mv $(ORIGINAL_MODULE) $(BACKUP_MODULE)
-else
-	$(warning There is no original file to backup.)
-endif
-	make -C $(KDIR) M=$(MODDIR) modules_install
-	depmod -A
-
-
-uninstall:
-ifeq ($(FOUND_NEW),yes)
-	-$(RM) $(NEW_MODULE)
-endif
-ifeq ($(FOUND_BACKUP),yes)
-	$(info Restoring backup.)
-	mv $(BACKUP_MODULE) $(ORIGINAL_MODULE)
-else
-	$(warning No backup found to restore.)
-	$(warning You may need to reinstall the kernel package to restore it.)
-endif
-	depmod -A
 
 
 dist:
@@ -92,3 +45,16 @@ dist:
 	cp $(DISTFILES) $(DISTDIR)/
 	tar -c -z -f $(DISTDIR).tar.gz $(DISTDIR)
 	$(RM) -r $(DISTDIR)
+
+
+install:
+	rm -rf $(SRCTREE)/$(PACKAGE)-$(VERSION)
+	cp -r $(SRCDIR) $(SRCTREE)/$(PACKAGE)-$(VERSION)
+	dkms add -m $(PACKAGE) -v $(VERSION)
+	dkms build -m $(PACKAGE) -v $(VERSION)
+	dkms install -m $(PACKAGE) -v $(VERSION)
+
+
+uninstall:
+	dkms remove -m $(PACKAGE) -v $(VERSION) --all
+	rm -rf /usr/src/$(PACKAGE)-$(VERSION)
