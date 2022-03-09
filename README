@@ -41,15 +41,13 @@ How is it different?
 How to compile?
 ===============
 
-You'll need the kernel development headers in your system.
+You'll need the kernel development headers in your system. Additionally, you will need the DKMS
+package; it allows for easy install and uninstall, and will automatically rebuild the module when
+the kernel is updated.
 
 Use the commands:
 
-    make
     sudo make install
-
-This will rename the original module, adding a ".backup" extension, to disable
-it from loading.
 
 To uninstall, use:
 
@@ -58,7 +56,7 @@ To uninstall, use:
 
 If you just want to test it, without installing it, use these commands instead:
 
-    make
+    make build
     sudo rmmod hid-wiimote
     sudo insmod ./hid-wiimote.ko
 
