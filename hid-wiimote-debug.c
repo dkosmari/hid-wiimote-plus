@@ -177,7 +177,7 @@ int wiidebug_init(struct wiimote_data *wdata)
 	unsigned long flags;
 	int ret = -ENOMEM;
 
-	dbg = kzalloc(sizeof(*dbg), GFP_KERNEL);
+	dbg = devm_kzalloc(&wdata->hdev->dev, sizeof(*dbg), GFP_KERNEL);
 	if (!dbg)
 		return -ENOMEM;
 
@@ -202,7 +202,7 @@ int wiidebug_init(struct wiimote_data *wdata)
 err_drm:
 	debugfs_remove(dbg->eeprom);
 err:
-	kfree(dbg);
+	devm_kfree(&wdata->hdev->dev, dbg);
 	return ret;
 }
 
@@ -220,7 +220,13 @@ void wiidebug_deinit(struct wiimote_data *wdata)
 
 	debugfs_remove(dbg->drm);
 	debugfs_remove(dbg->eeprom);
-	kfree(dbg);
+	devm_kfree(&wdata->hdev->dev, dbg);
 }
+
+#else /* CONFIG_DEBUG_FS */
+
+int wiidebug_init(struct wiimote_data *wdata) { return 0; }
+
+void wiidebug_deinit(struct wiimote_data *wdata) { }
 
 #endif

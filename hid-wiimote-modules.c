@@ -2,6 +2,7 @@
 /*
  * Device Modules for Nintendo Wii / Wii U HID Driver
  * Copyright (c) 2011-2013 David Herrmann <dh.herrmann@gmail.com>
+ * Copyright (c) 2019-2022 Daniel K. O.
  */
 
 /*
@@ -198,18 +199,18 @@ static enum power_supply_property wiimod_battery_props[] = {
 	POWER_SUPPLY_PROP_SCOPE,
 	POWER_SUPPLY_PROP_STATUS,
 	POWER_SUPPLY_PROP_ONLINE,
-	POWER_SUPPLY_PROP_MODEL_NAME
+	POWER_SUPPLY_PROP_MODEL_NAME,
 };
 
 static int wiimod_battery_get_property(struct power_supply *psy,
-				       enum power_supply_property psp,
+				       enum power_supply_property prop,
 				       union power_supply_propval *val)
 {
 	struct wiimote_data *wdata = power_supply_get_drvdata(psy);
 	int ret = 0, state;
 	unsigned long flags;
 
-	switch (psp) {
+	switch (prop) {
 		case POWER_SUPPLY_PROP_PRESENT:
 			val->intval = 1;
 			return 0;
@@ -244,7 +245,7 @@ static int wiimod_battery_get_property(struct power_supply *psy,
 			val->intval = 1;
 			return 0;
 		case POWER_SUPPLY_PROP_MODEL_NAME:
-			val->strval = WIIMOTE_NAME;
+			val->strval = wdata->hdev->name;
 			return 0;
 		default:
 			return -EINVAL;

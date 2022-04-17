@@ -281,17 +281,8 @@ extern ssize_t wiimote_cmd_read(struct wiimote_data *wdata, __u32 offset,
 extern void wiiproto_req_rmem(struct wiimote_data *wdata, bool eeprom,
 						__u32 offset, __u16 size);
 
-#ifdef CONFIG_DEBUG_FS
-
 extern int wiidebug_init(struct wiimote_data *wdata);
 extern void wiidebug_deinit(struct wiimote_data *wdata);
-
-#else
-
-static inline int wiidebug_init(void *u) { return 0; }
-static inline void wiidebug_deinit(void *u) { }
-
-#endif
 
 /* requires the state.lock spinlock to be held */
 static inline bool wiimote_cmd_pending(struct wiimote_data *wdata, int cmd,
