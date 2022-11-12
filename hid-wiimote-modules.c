@@ -475,9 +475,9 @@ static void wiimod_accel_in_accel(struct wiimote_data *wdata,
 	y |= (accel[1] >> 4) & 0x2;
 	z |= (accel[1] >> 5) & 0x2;
 
-	x = x - 0x200;
-	y = y - 0x200;
-	z = z - 0x200;
+	x -= 0x200;
+	y -= 0x200;
+	z -= 0x200;
 
 	input_report_abs(wdata->accel, ABS_X, x);
 	input_report_abs(wdata->accel, ABS_Y, y);
@@ -596,7 +596,6 @@ static void wiimod_ir_in_ir(struct wiimote_data *wdata, const __u8 *ir,
 	if (!(wdata->state.flags & WIIPROTO_FLAGS_IR))
 		return;
 
-        /* TODO: use MT protocol? */
 	switch (id) {
 	case 0:
 		xid = ABS_HAT0X;
@@ -1295,13 +1294,13 @@ static int wiimod_classic_probe(const struct wiimod_ops *ops,
 	input_set_capability(wdata->extension.input, EV_ABS, ABS_RX);
 	/* Triggers are digital, not analog, so we don't report ABS values. */
 	input_set_abs_params(wdata->extension.input,
-			     ABS_X, -30, 30, 1, 1);
+			     ABS_X, -30, 30, 1, 2);
 	input_set_abs_params(wdata->extension.input,
-			     ABS_Y, -30, 30, 1, 1);
+			     ABS_Y, -30, 30, 1, 2);
 	input_set_abs_params(wdata->extension.input,
-			     ABS_RX, -30, 30, 1, 1);
+			     ABS_RX, -30, 30, 1, 2);
 	input_set_abs_params(wdata->extension.input,
-			     ABS_RY, -30, 30, 1, 1);
+			     ABS_RY, -30, 30, 1, 2);
 
 	if (ext == WIIMOTE_EXT_CLASSIC_CONTROLLER) {
 		/* Only Classic Controller has analog L/R. */
