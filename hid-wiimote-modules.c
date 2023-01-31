@@ -235,7 +235,7 @@ static int wiimod_battery_get_property(struct power_supply *psy,
 			state = wdata->state.cmd_battery;
 			spin_unlock_irqrestore(&wdata->state.lock, flags);
 
-			val->intval = state * 100 / 255;
+			val->intval = state * 100 / 0xd0;
 			return ret;
 		}
 		case POWER_SUPPLY_PROP_STATUS:
