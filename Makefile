@@ -1,6 +1,6 @@
 PACKAGE := hid-wiimote
 
-VERSION := 0.8
+VERSION := 0.8.2
 
 DISTDIR := $(PACKAGE)-$(VERSION)
 
@@ -14,6 +14,7 @@ DISTFILES := \
 	hid-wiimote.h \
 	Kbuild \
 	Makefile \
+	99-wiimote.rules \
 	README
 
 
@@ -50,11 +51,13 @@ dist:
 install:
 	rm -rf $(SRCTREE)/$(PACKAGE)-$(VERSION)
 	cp -r $(SRCDIR) $(SRCTREE)/$(PACKAGE)-$(VERSION)
+	-cp -r 99-wiimote.rules /etc/udev/rules.d/
 	dkms add -m $(PACKAGE) -v $(VERSION)
 	dkms build -m $(PACKAGE) -v $(VERSION)
 	dkms install -m $(PACKAGE) -v $(VERSION)
 
 
 uninstall:
+	rm -f /etc/udev/rules.d/99-wiimote.rules
 	dkms remove -m $(PACKAGE) -v $(VERSION) --all
 	rm -rf /usr/src/$(PACKAGE)-$(VERSION)

@@ -996,9 +996,9 @@ static int wiimod_nunchuk_probe(const struct wiimod_ops *ops,
 	input_set_capability(wdata->extension.input, EV_ABS, ABS_X);
 	input_set_capability(wdata->extension.input, EV_ABS, ABS_Y);
 	input_set_abs_params(wdata->extension.input,
-			     ABS_X, -120, 120, 2, 4);
+			     ABS_X, -90, 90, 2, 5);
 	input_set_abs_params(wdata->extension.input,
-			     ABS_Y, -120, 120, 2, 4);
+			     ABS_Y, -90, 90, 2, 5);
 	/* set accelerometer properties */
 	set_bit(INPUT_PROP_ACCELEROMETER, wdata->extension.input->propbit);
 	input_set_capability(wdata->extension.input, EV_ABS, ABS_RX);
@@ -1294,13 +1294,13 @@ static int wiimod_classic_probe(const struct wiimod_ops *ops,
 	input_set_capability(wdata->extension.input, EV_ABS, ABS_RX);
 	/* Triggers are digital, not analog, so we don't report ABS values. */
 	input_set_abs_params(wdata->extension.input,
-			     ABS_X, -30, 30, 1, 2);
+			     ABS_X, -24, 24, 1, 2);
 	input_set_abs_params(wdata->extension.input,
-			     ABS_Y, -30, 30, 1, 2);
+			     ABS_Y, -24, 24, 1, 2);
 	input_set_abs_params(wdata->extension.input,
-			     ABS_RX, -30, 30, 1, 2);
+			     ABS_RX, -24, 24, 1, 2);
 	input_set_abs_params(wdata->extension.input,
-			     ABS_RY, -30, 30, 1, 2);
+			     ABS_RY, -24, 24, 1, 2);
 
 	if (ext == WIIMOTE_EXT_CLASSIC_CONTROLLER) {
 		/* Only Classic Controller has analog L/R. */
