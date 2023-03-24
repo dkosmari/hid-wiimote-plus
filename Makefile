@@ -1,11 +1,17 @@
-PACKAGE := hid-wiimote
+# this is used for packaging, to distinguish from the original
+PACKAGE := hid-wiimote-plus
 
-VERSION := 0.8.2
+# this is used to name the module file, so it must match the original to override it
+MODULE := hid-wiimote
+
+VERSION := 0.8.3
 
 DISTDIR := $(PACKAGE)-$(VERSION)
 
 DISTFILES := \
-	dkms.conf \
+	99-wiimote.rules \
+	COPYING \
+	dkms.conf.in \
 	gamepad.rst \
 	hid-ids.h \
 	hid-wiimote-core.c \
@@ -14,8 +20,7 @@ DISTFILES := \
 	hid-wiimote.h \
 	Kbuild \
 	Makefile \
-	99-wiimote.rules \
-	README
+	README.md
 
 
 KDIR ?= /lib/modules/$(shell uname -r)/build
@@ -28,7 +33,7 @@ SRCDIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 
 
 default:
-	$(info Run `make install` or `make uninstall` as root.)
+	$(error Run `make install` or `make uninstall` as root.)
 
 
 build:
@@ -39,6 +44,7 @@ clean:
 	$(info cleaning up)
 	make -C $(KDIR) M=$(SRCDIR) clean
 	$(RM) -r $(DISTDIR)
+	$(RM) dkms.conf
 
 
 dist:
@@ -48,8 +54,8 @@ dist:
 	$(RM) -r $(DISTDIR)
 
 
-install:
-	rm -rf $(SRCTREE)/$(PACKAGE)-$(VERSION)
+install: dkms.conf
+	$(RM) -rf $(SRCTREE)/$(PACKAGE)-$(VERSION)
 	cp -r $(SRCDIR) $(SRCTREE)/$(PACKAGE)-$(VERSION)
 	-cp -r 99-wiimote.rules /etc/udev/rules.d/
 	dkms add -m $(PACKAGE) -v $(VERSION)
@@ -58,6 +64,13 @@ install:
 
 
 uninstall:
-	rm -f /etc/udev/rules.d/99-wiimote.rules
-	dkms remove -m $(PACKAGE) -v $(VERSION) --all
-	rm -rf /usr/src/$(PACKAGE)-$(VERSION)
+	$(RM) /etc/udev/rules.d/99-wiimote.rules
+	-dkms remove -m $(PACKAGE) -v $(VERSION) --all
+	$(RM) -r /usr/src/$(PACKAGE)-$(VERSION)
+
+
+dkms.conf: dkms.conf.in
+	sed 	-e "s/@PACKAGE@/$(PACKAGE)/g" \
+		-e "s/@VERSION@/$(VERSION)/g" \
+		-e "s/@MODULE@/$(MODULE)/g" \
+		$< > $@

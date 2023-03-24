@@ -2,6 +2,7 @@
 /*
  * Debug support for HID Nintendo Wii / Wii U peripherals
  * Copyright (c) 2011-2013 David Herrmann <dh.herrmann@gmail.com>
+ * Copyright (c) 2018-2023 Daniel K. O.
  */
 
 /*

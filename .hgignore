@@ -1,0 +1,11 @@
+syntax: glob
+
+*.cmd
+*.ko
+*.mod
+*.mod.c
+*.o
+*.tar.gz
+*~
+Module.symvers
+modules.order

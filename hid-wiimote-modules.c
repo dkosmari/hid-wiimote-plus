@@ -2,7 +2,7 @@
 /*
  * Device Modules for Nintendo Wii / Wii U HID Driver
  * Copyright (c) 2011-2013 David Herrmann <dh.herrmann@gmail.com>
- * Copyright (c) 2019-2022 Daniel K. O.
+ * Copyright (c) 2019-2023 Daniel K. O.
  */
 
 /*
