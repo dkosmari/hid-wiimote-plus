@@ -7,5 +7,6 @@ syntax: glob
 *.o
 *.tar.gz
 *~
+dkms.conf
 Module.symvers
 modules.order

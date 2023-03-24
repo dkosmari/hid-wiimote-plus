@@ -14,9 +14,9 @@ How is it different?
    included here.
 
   - D-pad buttons are now mapped to `BTN_DPAD_*` events, instead of keyboard arrow keys.
-    
-  - Buttons +/Start and -/Select are now mapped to `BTN_START and BTN_SELECT`.
-  
+
+  - Buttons `+/Start` and `-/Select` are now mapped to `BTN_START` and `BTN_SELECT`.
+
   - Face/action buttons are now mapped to east, south, north, west buttons.
 
 2. Better battery status reporting, to make it interact more nicely with desktop
@@ -31,11 +31,11 @@ How is it different?
 5. Sticks (Nunchuk and Classic Controller) don't invert the Y axis anymore. Positive
    values mean "down."
 
-6. Classic Controller Pro no longer reports analog shoulder buttons (L/R), only
+6. Classic Controller Pro no longer reports analog shoulder buttons (`L/R`), only
    the Classic Controller (not Pro) has them. Range for analog shoulder buttons
-   has been corrected from [-30,+30] to [0,+60].
+   has been corrected from `[-30, +30]` to `[0, +60]`.
 
-7. Balance Board reports its sensors as HAT0X, HAT1X, HAT2X, HAT3X; that is,
+7. Balance Board reports its sensors as `HAT0X`, `HAT1X`, `HAT2X`, `HAT3X`; that is,
    four 1-D axes instead of two 2-D axes.
 
 8. No more emulation of an analog stick through the d-pad.
@@ -62,4 +62,3 @@ If you just want to test it, without installing it, use these commands instead:
     make build
     sudo rmmod hid-wiimote
     sudo insmod ./hid-wiimote.ko
-
