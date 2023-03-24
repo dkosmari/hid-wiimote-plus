@@ -13,11 +13,11 @@ How is it different?
    and keyboard. For convenience, [gamepad.rst](gamepad.rst) from the Linux docs is
    included here.
 
-  - D-pad buttons are now mapped to `BTN_DPAD_*` events, instead of keyboard arrow keys.
+   - D-pad buttons are now mapped to `BTN_DPAD_*` events, instead of keyboard arrow keys.
 
-  - Buttons `+/Start` and `-/Select` are now mapped to `BTN_START` and `BTN_SELECT`.
+   - Buttons `+/Start` and `-/Select` are now mapped to `BTN_START` and `BTN_SELECT`.
 
-  - Face/action buttons are now mapped to east, south, north, west buttons.
+   - Face/action buttons are now mapped to east, south, north, west buttons.
 
 2. Better battery status reporting, to make it interact more nicely with desktop
    environments.
