@@ -62,3 +62,11 @@ If you just want to test it, without installing it, use these commands instead:
     make build
     sudo rmmod hid-wiimote
     sudo insmod ./hid-wiimote.ko
+
+
+Permission issues
+-----------------
+
+The script [99-wiimote.rules](99-wiimote.rules) is installed automatically to
+`/etc/udev/rules.d`. If that script is not present, or conflicts with other scripts, you
+may end up with devices missing the `ID_INPUT_JOYSTICK` tag, or with wrong permissions.
