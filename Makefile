@@ -4,6 +4,7 @@ PACKAGE := hid-wiimote-plus
 # this is used to name the module file, so it must match the original to override it
 MODULE := hid-wiimote
 
+# make sure to also update the version inside hid-wiimote-core.c
 VERSION := 0.8.4
 
 DISTDIR := $(PACKAGE)-$(VERSION)
@@ -13,7 +14,6 @@ DISTFILES := \
 	COPYING \
 	dkms.conf.in \
 	gamepad.rst \
-	hid-ids.h \
 	hid-wiimote-core.c \
 	hid-wiimote-debug.c \
 	hid-wiimote-modules.c \
@@ -37,7 +37,7 @@ default:
 
 
 build:
-	make --directory=$(KDIR) M=$(SRCDIR)
+	make --directory=$(KDIR) M=$(SRCDIR) WIIMOTE_MODULE_VERSION=$(VERSION)
 
 
 clean:

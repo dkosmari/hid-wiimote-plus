@@ -195,12 +195,44 @@ static const struct wiimod_ops wiimod_rumble = {
 
 static enum power_supply_property wiimod_battery_props[] = {
 	POWER_SUPPLY_PROP_PRESENT,
+	POWER_SUPPLY_PROP_ONLINE,
 	POWER_SUPPLY_PROP_CAPACITY,
+	POWER_SUPPLY_PROP_CAPACITY_LEVEL,
 	POWER_SUPPLY_PROP_SCOPE,
 	POWER_SUPPLY_PROP_STATUS,
-	POWER_SUPPLY_PROP_ONLINE,
 	POWER_SUPPLY_PROP_MODEL_NAME,
+	POWER_SUPPLY_PROP_SERIAL_NUMBER,
 };
+
+
+static int wiimod_battery_request_update(struct wiimote_data *wdata,
+					 int *value)
+{
+	int ret;
+	unsigned long flags;
+
+	ret = wiimote_cmd_acquire(wdata);
+	if (ret)
+		return ret;
+
+	spin_lock_irqsave(&wdata->state.lock, flags);
+	wiimote_cmd_set(wdata, WIIPROTO_REQ_SREQ, 0);
+	wiiproto_req_status(wdata);
+	spin_unlock_irqrestore(&wdata->state.lock, flags);
+
+	ret = wiimote_cmd_wait(wdata);
+	if (ret)
+	    return ret;
+
+	wiimote_cmd_release(wdata);
+
+	spin_lock_irqsave(&wdata->state.lock, flags);
+	*value = wdata->state.cmd_battery;
+	spin_unlock_irqrestore(&wdata->state.lock, flags);
+
+	return 0;
+}
+
 
 static int wiimod_battery_get_property(struct power_supply *psy,
 				       enum power_supply_property prop,
@@ -208,47 +240,47 @@ static int wiimod_battery_get_property(struct power_supply *psy,
 {
 	struct wiimote_data *wdata = power_supply_get_drvdata(psy);
 	int ret = 0, state;
-	unsigned long flags;
 
 	switch (prop) {
-		case POWER_SUPPLY_PROP_PRESENT:
-			val->intval = 1;
-			return 0;
-		case POWER_SUPPLY_PROP_SCOPE:
-			val->intval = POWER_SUPPLY_SCOPE_DEVICE;
-			return 0;
-		case POWER_SUPPLY_PROP_CAPACITY:
-		{
-			ret = wiimote_cmd_acquire(wdata);
-			if (ret)
-				return ret;
-
-			spin_lock_irqsave(&wdata->state.lock, flags);
-			wiimote_cmd_set(wdata, WIIPROTO_REQ_SREQ, 0);
-			wiiproto_req_status(wdata);
-			spin_unlock_irqrestore(&wdata->state.lock, flags);
-
-			wiimote_cmd_wait(wdata);
-			wiimote_cmd_release(wdata);
-
-			spin_lock_irqsave(&wdata->state.lock, flags);
-			state = wdata->state.cmd_battery;
-			spin_unlock_irqrestore(&wdata->state.lock, flags);
-
-			val->intval = state;
+	case POWER_SUPPLY_PROP_PRESENT:
+	case POWER_SUPPLY_PROP_ONLINE:
+		val->intval = 1;
+		return 0;
+	case POWER_SUPPLY_PROP_SCOPE:
+		val->intval = POWER_SUPPLY_SCOPE_DEVICE;
+		return 0;
+	case POWER_SUPPLY_PROP_CAPACITY:
+		ret = wiimod_battery_request_update(wdata, &state);
+		if (ret)
 			return ret;
-		}
-		case POWER_SUPPLY_PROP_STATUS:
-			val->intval = POWER_SUPPLY_STATUS_DISCHARGING;
-			return 0;
-		case POWER_SUPPLY_PROP_ONLINE:
-			val->intval = 1;
-			return 0;
-		case POWER_SUPPLY_PROP_MODEL_NAME:
-			val->strval = wdata->hdev->name;
-			return 0;
-		default:
-			return -EINVAL;
+		val->intval = state;
+		return 0;
+	case POWER_SUPPLY_PROP_CAPACITY_LEVEL:
+		ret = wiimod_battery_request_update(wdata, &state);
+		if (ret)
+			return ret;
+		if (state >= 80)
+			val->intval = POWER_SUPPLY_CAPACITY_LEVEL_FULL;
+		else if (state >= 60)
+			val->intval = POWER_SUPPLY_CAPACITY_LEVEL_HIGH;
+		else if (state >= 40)
+			val->intval = POWER_SUPPLY_CAPACITY_LEVEL_NORMAL;
+		else if (state >= 20)
+			val->intval = POWER_SUPPLY_CAPACITY_LEVEL_LOW;
+		else
+			val->intval = POWER_SUPPLY_CAPACITY_LEVEL_CRITICAL;
+		return 0;
+	case POWER_SUPPLY_PROP_STATUS:
+		val->intval = POWER_SUPPLY_STATUS_DISCHARGING;
+		return 0;
+	case POWER_SUPPLY_PROP_MODEL_NAME:
+		val->strval = wdata->hdev->name;
+		return 0;
+	case POWER_SUPPLY_PROP_SERIAL_NUMBER:
+		val->strval = wdata->hdev->uniq;
+		return 0;
+	default:
+		return -EINVAL;
 	}
 }
 
@@ -264,6 +296,7 @@ static int wiimod_battery_probe(const struct wiimod_ops *ops,
 	wdata->battery_desc.get_property = wiimod_battery_get_property;
 	wdata->battery_desc.type = POWER_SUPPLY_TYPE_BATTERY;
 	wdata->battery_desc.use_for_apm = 0;
+	wdata->battery_desc.no_thermal = true;
 	wdata->battery_desc.name = devm_kasprintf(&wdata->hdev->dev,
 						  GFP_KERNEL, "wiimote_battery_%s",
 						  wdata->hdev->uniq);
@@ -509,7 +542,7 @@ static void wiimod_accel_close(struct input_dev *dev)
 
 static int wiimod_accel_probe(const struct wiimod_ops *ops,
 			      struct wiimote_data *wdata,
-    			      unsigned int ext)
+			      unsigned int ext)
 {
 	int ret;
 
@@ -1309,7 +1342,7 @@ static int wiimod_classic_probe(const struct wiimod_ops *ops,
 		input_set_abs_params(wdata->extension.input,
 				     ABS_HAT1Y, 0, 60, 1, 1);
 	}
-        
+
 	ret = input_register_device(wdata->extension.input);
 	if (ret)
 		goto err_free;
@@ -2726,3 +2759,9 @@ const struct wiimod_ops *wiimod_ext_table[WIIMOTE_EXT_NUM] = {
 	[WIIMOTE_EXT_DRUMS] = &wiimod_drums,
 	[WIIMOTE_EXT_GUITAR] = &wiimod_guitar,
 };
+
+
+/* Local Variables:    */
+/* indent-tabs-mode: t */
+/* c-basic-offset: 8   */
+/* End:                */

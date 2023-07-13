@@ -231,3 +231,8 @@ int wiidebug_init(struct wiimote_data *wdata) { return 0; }
 void wiidebug_deinit(struct wiimote_data *wdata) { }
 
 #endif
+
+
+/* Local Variables:    */
+/* indent-tabs-mode: t */
+/* End:                */

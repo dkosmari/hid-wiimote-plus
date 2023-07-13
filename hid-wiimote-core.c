@@ -15,8 +15,14 @@
 #include <linux/module.h>
 #include <linux/mutex.h>
 #include <linux/spinlock.h>
-#include "hid-ids.h"
+
 #include "hid-wiimote.h"
+
+/* Note: from 'linux/drivers/hid/hid-ids.h' */
+#define USB_VENDOR_ID_NINTENDO		0x057e
+#define USB_DEVICE_ID_NINTENDO_WIIMOTE	0x0306
+#define USB_DEVICE_ID_NINTENDO_WIIMOTE2	0x0330
+
 
 /* output queue handling */
 
@@ -29,13 +35,13 @@ static int wiimote_hid_send(struct hid_device *hdev, __u8 *buffer,
 	if (!hdev->ll_driver->output_report)
 		return -ENODEV;
 
-	buf = kmemdup(buffer, count, GFP_KERNEL);
+	buf = devm_kmemdup(&hdev->dev, buffer, count, GFP_KERNEL);
 	if (!buf)
 		return -ENOMEM;
 
 	ret = hid_hw_output_report(hdev, buf, count);
 
-	kfree(buf);
+	devm_kfree(&hdev->dev, buf);
 	return ret;
 }
 
@@ -1739,7 +1745,7 @@ static struct wiimote_data *wiimote_create(struct hid_device *hdev)
 {
 	struct wiimote_data *wdata;
 
-	wdata = kzalloc(sizeof(*wdata), GFP_KERNEL);
+	wdata = devm_kzalloc(&hdev->dev, sizeof(*wdata), GFP_KERNEL);
 	if (!wdata)
 		return NULL;
 
@@ -1785,7 +1791,7 @@ static void wiimote_destroy(struct wiimote_data *wdata)
 	hid_hw_close(wdata->hdev);
 	hid_hw_stop(wdata->hdev);
 
-	kfree(wdata);
+	devm_kfree(&wdata->hdev->dev, wdata);
 }
 
 static int wiimote_hid_probe(struct hid_device *hdev,
@@ -1856,7 +1862,7 @@ err_stop:
 err:
 	input_free_device(wdata->ir);
 	input_free_device(wdata->accel);
-	kfree(wdata);
+	devm_kfree(&hdev->dev, wdata);
 	return ret;
 }
 
@@ -1891,4 +1897,10 @@ MODULE_LICENSE("GPL");
 MODULE_AUTHOR("David Herrmann <dh.herrmann@gmail.com>");
 MODULE_AUTHOR("Daniel K. O.");
 MODULE_DESCRIPTION("Driver for Nintendo Wii / Wii U peripherals");
-MODULE_VERSION("0.8.3-plus");
+MODULE_VERSION(WIIMOTE_MODULE_VERSION "-plus");
+
+
+/* Local Variables:    */
+/* indent-tabs-mode: t */
+/* c-basic-offset: 8   */
+/* End:                */
