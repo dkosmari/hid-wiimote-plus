@@ -28,14 +28,10 @@ SRCTREE ?= /usr/src
 SRCDIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 
 
-.PHONY: default build clean dist install uninstall
+.PHONY: all clean dist install uninstall
 
 
-default:
-	$(error Run `make install` or `make uninstall` as root.)
-
-
-build:
+all:
 	make --directory=$(KDIR) M=$(SRCDIR) WIIMOTE_MODULE_VERSION=$(VERSION)
 
 

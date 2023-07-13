@@ -26,8 +26,8 @@
 
 /* output queue handling */
 
-static int wiimote_hid_send(struct hid_device *hdev, __u8 *buffer,
-			    size_t count)
+static int wiimote_hid_send(struct hid_device *hdev,
+			    __u8 *buffer, size_t count)
 {
 	__u8 *buf;
 	int ret;
@@ -310,10 +310,10 @@ void wiiproto_req_ir2(struct wiimote_data *wdata, __u8 flags)
 }
 
 #define wiiproto_req_wreg(wdata, os, buf, sz) \
-			wiiproto_req_wmem((wdata), false, (os), (buf), (sz))
+	wiiproto_req_wmem((wdata), false, (os), (buf), (sz))
 
 #define wiiproto_req_weeprom(wdata, os, buf, sz) \
-			wiiproto_req_wmem((wdata), true, (os), (buf), (sz))
+	wiiproto_req_wmem((wdata), true, (os), (buf), (sz))
 
 static void wiiproto_req_wmem(struct wiimote_data *wdata, bool eeprom,
 				__u32 offset, const __u8 *buf, __u8 size)
@@ -340,8 +340,8 @@ static void wiiproto_req_wmem(struct wiimote_data *wdata, bool eeprom,
 	wiimote_queue(wdata, cmd, sizeof(cmd));
 }
 
-void wiiproto_req_rmem(struct wiimote_data *wdata, bool eeprom, __u32 offset,
-								__u16 size)
+void wiiproto_req_rmem(struct wiimote_data *wdata, bool eeprom,
+		       __u32 offset, __u16 size)
 {
 	__u8 cmd[7];
 
@@ -1770,6 +1770,8 @@ static struct wiimote_data *wiimote_create(struct hid_device *hdev)
 static void wiimote_destroy(struct wiimote_data *wdata)
 {
 	unsigned long flags;
+	struct hid_device* hdev = wdata->hdev;
+	struct device* dev = &wdata->hdev->dev;
 
 	wiidebug_deinit(wdata);
 
@@ -1781,21 +1783,19 @@ static void wiimote_destroy(struct wiimote_data *wdata)
 	cancel_work_sync(&wdata->init_worker);
 	del_timer_sync(&wdata->timer);
 
-	device_remove_file(&wdata->hdev->dev, &dev_attr_devtype);
-	device_remove_file(&wdata->hdev->dev, &dev_attr_extension);
+	device_remove_file(dev, &dev_attr_devtype);
+	device_remove_file(dev, &dev_attr_extension);
 
 	wiimote_mp_unload(wdata);
 	wiimote_ext_unload(wdata);
 	wiimote_modules_unload(wdata);
 	cancel_work_sync(&wdata->queue.worker);
-	hid_hw_close(wdata->hdev);
-	hid_hw_stop(wdata->hdev);
-
-	devm_kfree(&wdata->hdev->dev, wdata);
+	hid_hw_close(hdev);
+	hid_hw_stop(hdev);
 }
 
 static int wiimote_hid_probe(struct hid_device *hdev,
-				const struct hid_device_id *id)
+			     const struct hid_device_id *id)
 {
 	struct wiimote_data *wdata;
 	int ret;
@@ -1862,7 +1862,6 @@ err_stop:
 err:
 	input_free_device(wdata->ir);
 	input_free_device(wdata->accel);
-	devm_kfree(&hdev->dev, wdata);
 	return ret;
 }
 
@@ -1872,6 +1871,7 @@ static void wiimote_hid_remove(struct hid_device *hdev)
 
 	hid_info(hdev, "Device removed\n");
 	wiimote_destroy(wdata);
+	hid_info(hdev, "Device removed 2\n");
 }
 
 static const struct hid_device_id wiimote_hid_devices[] = {

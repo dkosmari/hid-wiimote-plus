@@ -59,7 +59,7 @@ To uninstall, use:
 
 If you just want to test it, without installing it, use these commands instead:
 
-    make build
+    make
     sudo rmmod hid-wiimote
     sudo insmod ./hid-wiimote.ko
 
