@@ -49,11 +49,12 @@ dist:
 	$(RM) --recursive $(DISTDIR)
 
 
-install: dkms.conf
+install:
+	-cp --target-directory=/etc/udev/rules.d 99-wiimote.rules
 	$(RM) --recursive $(SRCTREE)/$(DISTDIR)
 	mkdir --parents $(SRCTREE)/$(DISTDIR)
-	cp --target-directory=$(SRCTREE)/$(DISTDIR) $(DISTFILES) dkms.conf
-	-cp --target-directory=/etc/udev/rules.d 99-wiimote.rules
+	cp --target-directory=$(SRCTREE)/$(DISTDIR) $(DISTFILES)
+	make --directory=$(SRCTREE)/$(DISTDIR) dkms.conf
 	dkms add -m $(PACKAGE) -v $(VERSION)
 	dkms build -m $(PACKAGE) -v $(VERSION)
 	dkms install -m $(PACKAGE) -v $(VERSION)
