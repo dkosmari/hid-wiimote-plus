@@ -221,10 +221,11 @@ static int wiimod_battery_request_update(struct wiimote_data *wdata,
 	spin_unlock_irqrestore(&wdata->state.lock, flags);
 
 	ret = wiimote_cmd_wait(wdata);
-	if (ret)
-	    return ret;
 
 	wiimote_cmd_release(wdata);
+
+	if (ret)
+		return ret;
 
 	spin_lock_irqsave(&wdata->state.lock, flags);
 	*value = wdata->state.cmd_battery;
