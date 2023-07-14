@@ -4,7 +4,7 @@ PACKAGE := hid-wiimote-plus
 # this is used to name the module file, so it must match the original to override it
 MODULE := hid-wiimote
 
-VERSION := 0.8.5
+VERSION := 0.9.0
 
 DISTDIR := $(PACKAGE)-$(VERSION)
 
