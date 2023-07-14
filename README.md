@@ -22,10 +22,10 @@ How is it different?
 2. Better battery status reporting, to make it interact more nicely with desktop
    environments.
 
-3. Memory allocation is done in the module's scope, so it's guaranteed to be released when
-   the module unloads.
+3. Memory allocation is done in the device's scope, so it's guaranteed to be released when
+   the device is removed.
 
-4. Accelerometer and gyro devices register proper metadata
+4. Accelerometer and gyro devices report proper metadata
    (`INPUT_PROP_ACCELEROMETER` and correct units.)
 
 5. Sticks (Nunchuk and Classic Controller) don't invert the Y axis anymore. Positive
@@ -38,7 +38,8 @@ How is it different?
 7. Balance Board reports its sensors as `HAT0X`, `HAT1X`, `HAT2X`, `HAT3X`; that is,
    four 1-D axes instead of two 2-D axes.
 
-8. No more emulation of an analog stick through the d-pad.
+8. No more emulation of an analog stick through the d-pad. A device driver is not supposed
+   to create fake inputs that confuse applications.
 
 
 How to install?

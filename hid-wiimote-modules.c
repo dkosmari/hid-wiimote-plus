@@ -892,6 +892,7 @@ static const __u16 wiimod_nunchuk_map[] = {
 
 static void wiimod_nunchuk_in_ext(struct wiimote_data *wdata, const __u8 *ext)
 {
+	struct input_dev *indev = wdata->extension.input;
 	__s16 x, y, z, bx, by;
 
 	/*   Byte |   8    7 |  6    5 |  4    3 |  2 |  1  |
@@ -952,30 +953,30 @@ static void wiimod_nunchuk_in_ext(struct wiimote_data *wdata, const __u8 *ext)
 	  Linux convention:
 	  (for ABS values negative is left/up, positive is right/down)
 	*/
-	input_report_abs(wdata->extension.input, ABS_X, bx);
-	input_report_abs(wdata->extension.input, ABS_Y, -by);
+	input_report_abs(indev, ABS_X, bx);
+	input_report_abs(indev, ABS_Y, -by);
 
-	input_report_abs(wdata->extension.input, ABS_RX, x);
-	input_report_abs(wdata->extension.input, ABS_RY, y);
-	input_report_abs(wdata->extension.input, ABS_RZ, z);
+	input_report_abs(indev, ABS_RX, x);
+	input_report_abs(indev, ABS_RY, y);
+	input_report_abs(indev, ABS_RZ, z);
 
 	if (wdata->state.flags & WIIPROTO_FLAG_MP_ACTIVE) {
-		input_report_key(wdata->extension.input,
-			wiimod_nunchuk_map[WIIMOD_NUNCHUK_KEY_Z],
-			!(ext[5] & 0x04));
-		input_report_key(wdata->extension.input,
-			wiimod_nunchuk_map[WIIMOD_NUNCHUK_KEY_C],
-			!(ext[5] & 0x08));
+		input_report_key(indev,
+				 wiimod_nunchuk_map[WIIMOD_NUNCHUK_KEY_Z],
+				 !(ext[5] & 0x04));
+		input_report_key(indev,
+				 wiimod_nunchuk_map[WIIMOD_NUNCHUK_KEY_C],
+				 !(ext[5] & 0x08));
 	} else {
-		input_report_key(wdata->extension.input,
-			wiimod_nunchuk_map[WIIMOD_NUNCHUK_KEY_Z],
-			!(ext[5] & 0x01));
-		input_report_key(wdata->extension.input,
-			wiimod_nunchuk_map[WIIMOD_NUNCHUK_KEY_C],
-			!(ext[5] & 0x02));
+		input_report_key(indev,
+				 wiimod_nunchuk_map[WIIMOD_NUNCHUK_KEY_Z],
+				 !(ext[5] & 0x01));
+		input_report_key(indev,
+				 wiimod_nunchuk_map[WIIMOD_NUNCHUK_KEY_C],
+				 !(ext[5] & 0x02));
 	}
 
-	input_sync(wdata->extension.input);
+	input_sync(indev);
 }
 
 static int wiimod_nunchuk_open(struct input_dev *dev)
@@ -1007,56 +1008,48 @@ static int wiimod_nunchuk_probe(const struct wiimod_ops *ops,
 				unsigned int ext)
 {
 	int ret, i;
+	struct input_dev *indev;
 
-	wdata->extension.input = input_allocate_device();
-	if (!wdata->extension.input)
+	indev = wdata->extension.input = input_allocate_device();
+	if (!indev)
 		return -ENOMEM;
 
-	input_set_drvdata(wdata->extension.input, wdata);
-	wdata->extension.input->open = wiimod_nunchuk_open;
-	wdata->extension.input->close = wiimod_nunchuk_close;
-	wdata->extension.input->dev.parent = &wdata->hdev->dev;
-	wdata->extension.input->id.bustype = wdata->hdev->bus;
-	wdata->extension.input->id.vendor = wdata->hdev->vendor;
-	wdata->extension.input->id.product = wdata->hdev->product;
-	wdata->extension.input->id.version = wdata->hdev->version;
-	wdata->extension.input->name = WIIMOTE_NAME " Nunchuk";
+	input_set_drvdata(indev, wdata);
+	indev->open = wiimod_nunchuk_open;
+	indev->close = wiimod_nunchuk_close;
+	indev->dev.parent = &wdata->hdev->dev;
+	indev->id.bustype = wdata->hdev->bus;
+	indev->id.vendor = wdata->hdev->vendor;
+	indev->id.product = wdata->hdev->product;
+	indev->id.version = wdata->hdev->version;
+	indev->name = WIIMOTE_NAME " Nunchuk";
 
 	for (i = 0; i < WIIMOD_NUNCHUK_KEY_NUM; ++i)
-		input_set_capability(wdata->extension.input,
-				     EV_KEY, wiimod_nunchuk_map[i]);
+		input_set_capability(indev, EV_KEY, wiimod_nunchuk_map[i]);
 
-	input_set_capability(wdata->extension.input, EV_ABS, ABS_X);
-	input_set_capability(wdata->extension.input, EV_ABS, ABS_Y);
-	input_set_abs_params(wdata->extension.input,
-			     ABS_X, -90, 90, 2, 5);
-	input_set_abs_params(wdata->extension.input,
-			     ABS_Y, -90, 90, 2, 5);
+	input_set_capability(indev, EV_ABS, ABS_X);
+	input_set_capability(indev, EV_ABS, ABS_Y);
+	input_set_abs_params(indev, ABS_X, -90, 90, 2, 5);
+	input_set_abs_params(indev, ABS_Y, -90, 90, 2, 5);
 	/* set accelerometer properties */
-	set_bit(INPUT_PROP_ACCELEROMETER, wdata->extension.input->propbit);
-	input_set_capability(wdata->extension.input, EV_ABS, ABS_RX);
-	input_set_capability(wdata->extension.input, EV_ABS, ABS_RY);
-	input_set_capability(wdata->extension.input, EV_ABS, ABS_RZ);
-	input_set_abs_params(wdata->extension.input,
-			     ABS_RX, -500, 500, 2, 4);
-	input_set_abs_params(wdata->extension.input,
-			     ABS_RY, -500, 500, 2, 4);
-	input_set_abs_params(wdata->extension.input,
-			     ABS_RZ, -500, 500, 2, 4);
+	set_bit(INPUT_PROP_ACCELEROMETER, indev->propbit);
+	input_set_capability(indev, EV_ABS, ABS_RX);
+	input_set_capability(indev, EV_ABS, ABS_RY);
+	input_set_capability(indev, EV_ABS, ABS_RZ);
+	input_set_abs_params(indev, ABS_RX, -500, 500, 2, 4);
+	input_set_abs_params(indev, ABS_RY, -500, 500, 2, 4);
+	input_set_abs_params(indev, ABS_RZ, -500, 500, 2, 4);
 	/* set resolution for accelerometers: 100 = 1 g */
-	input_abs_set_res(wdata->extension.input, ABS_RX, 100);
-	input_abs_set_res(wdata->extension.input, ABS_RY, 100);
-	input_abs_set_res(wdata->extension.input, ABS_RZ, 100);
+	input_abs_set_res(indev, ABS_RX, 100);
+	input_abs_set_res(indev, ABS_RY, 100);
+	input_abs_set_res(indev, ABS_RZ, 100);
 
-	ret = input_register_device(wdata->extension.input);
-	if (ret)
-		goto err_free;
+	ret = input_register_device(indev);
+	if (ret) {
+		input_free_device(indev);
+		wdata->extension.input = NULL;
+	}
 
-	return 0;
-
-err_free:
-	input_free_device(wdata->extension.input);
-	wdata->extension.input = NULL;
 	return ret;
 }
 
@@ -1128,6 +1121,7 @@ static const __u16 wiimod_classic_map[] = {
 
 static void wiimod_classic_in_ext(struct wiimote_data *wdata, const __u8 *ext)
 {
+	struct input_dev *indev = wdata->extension.input;
 	__s8 rx, ry, lx, ly, lt, rt;
 
 	/*   Byte |  8  |  7  |  6  |  5  |  4  |  3  |  2  |  1  |
@@ -1200,74 +1194,74 @@ static void wiimod_classic_in_ext(struct wiimote_data *wdata, const __u8 *ext)
 	rx = rx - 0x20;
 	ry = ry - 0x20;
 
-	input_report_abs(wdata->extension.input, ABS_X, lx);
-	input_report_abs(wdata->extension.input, ABS_Y, -ly);
-	input_report_abs(wdata->extension.input, ABS_RX, rx);
-	input_report_abs(wdata->extension.input, ABS_RY, -ry);
+	input_report_abs(indev, ABS_X, lx);
+	input_report_abs(indev, ABS_Y, -ly);
+	input_report_abs(indev, ABS_RX, rx);
+	input_report_abs(indev, ABS_RY, -ry);
 
 	if (wdata->state.exttype == WIIMOTE_EXT_CLASSIC_CONTROLLER) {
 		/*Only Classic Controller has analog L/R. */
-		input_report_abs(wdata->extension.input, ABS_HAT1X, rt);
-		input_report_abs(wdata->extension.input, ABS_HAT1Y, lt);
+		input_report_abs(indev, ABS_HAT0X, lt);
+		input_report_abs(indev, ABS_HAT1X, rt);
 	}
 
-	input_report_key(wdata->extension.input,
+	input_report_key(indev,
 			 wiimod_classic_map[WIIMOD_CLASSIC_KEY_RIGHT],
 			 !(ext[4] & 0x80));
-	input_report_key(wdata->extension.input,
+	input_report_key(indev,
 			 wiimod_classic_map[WIIMOD_CLASSIC_KEY_DOWN],
 			 !(ext[4] & 0x40));
-	input_report_key(wdata->extension.input,
+	input_report_key(indev,
 			 wiimod_classic_map[WIIMOD_CLASSIC_KEY_LT],
 			 !(ext[4] & 0x20));
-	input_report_key(wdata->extension.input,
+	input_report_key(indev,
 			 wiimod_classic_map[WIIMOD_CLASSIC_KEY_MINUS],
 			 !(ext[4] & 0x10));
-	input_report_key(wdata->extension.input,
+	input_report_key(indev,
 			 wiimod_classic_map[WIIMOD_CLASSIC_KEY_HOME],
 			 !(ext[4] & 0x08));
-	input_report_key(wdata->extension.input,
+	input_report_key(indev,
 			 wiimod_classic_map[WIIMOD_CLASSIC_KEY_PLUS],
 			 !(ext[4] & 0x04));
-	input_report_key(wdata->extension.input,
+	input_report_key(indev,
 			 wiimod_classic_map[WIIMOD_CLASSIC_KEY_RT],
 			 !(ext[4] & 0x02));
-	input_report_key(wdata->extension.input,
+	input_report_key(indev,
 			 wiimod_classic_map[WIIMOD_CLASSIC_KEY_ZL],
 			 !(ext[5] & 0x80));
-	input_report_key(wdata->extension.input,
+	input_report_key(indev,
 			 wiimod_classic_map[WIIMOD_CLASSIC_KEY_B],
 			 !(ext[5] & 0x40));
-	input_report_key(wdata->extension.input,
+	input_report_key(indev,
 			 wiimod_classic_map[WIIMOD_CLASSIC_KEY_Y],
 			 !(ext[5] & 0x20));
-	input_report_key(wdata->extension.input,
+	input_report_key(indev,
 			 wiimod_classic_map[WIIMOD_CLASSIC_KEY_A],
 			 !(ext[5] & 0x10));
-	input_report_key(wdata->extension.input,
+	input_report_key(indev,
 			 wiimod_classic_map[WIIMOD_CLASSIC_KEY_X],
 			 !(ext[5] & 0x08));
-	input_report_key(wdata->extension.input,
+	input_report_key(indev,
 			 wiimod_classic_map[WIIMOD_CLASSIC_KEY_ZR],
 			 !(ext[5] & 0x04));
 
 	if (wdata->state.flags & WIIPROTO_FLAG_MP_ACTIVE) {
-		input_report_key(wdata->extension.input,
-			 wiimod_classic_map[WIIMOD_CLASSIC_KEY_LEFT],
-			 !(ext[1] & 0x01));
-		input_report_key(wdata->extension.input,
-			 wiimod_classic_map[WIIMOD_CLASSIC_KEY_UP],
-			 !(ext[0] & 0x01));
+		input_report_key(indev,
+				 wiimod_classic_map[WIIMOD_CLASSIC_KEY_LEFT],
+				 !(ext[1] & 0x01));
+		input_report_key(indev,
+				 wiimod_classic_map[WIIMOD_CLASSIC_KEY_UP],
+				 !(ext[0] & 0x01));
 	} else {
-		input_report_key(wdata->extension.input,
-			 wiimod_classic_map[WIIMOD_CLASSIC_KEY_LEFT],
-			 !(ext[5] & 0x02));
-		input_report_key(wdata->extension.input,
-			 wiimod_classic_map[WIIMOD_CLASSIC_KEY_UP],
-			 !(ext[5] & 0x01));
+		input_report_key(indev,
+				 wiimod_classic_map[WIIMOD_CLASSIC_KEY_LEFT],
+				 !(ext[5] & 0x02));
+		input_report_key(indev,
+				 wiimod_classic_map[WIIMOD_CLASSIC_KEY_UP],
+				 !(ext[5] & 0x01));
 	}
 
-	input_sync(wdata->extension.input);
+	input_sync(indev);
 }
 
 static int wiimod_classic_open(struct input_dev *dev)
@@ -1299,59 +1293,50 @@ static int wiimod_classic_probe(const struct wiimod_ops *ops,
 				unsigned int ext)
 {
 	int ret, i;
+	struct input_dev *indev;
 
-	wdata->extension.input = input_allocate_device();
-	if (!wdata->extension.input)
+	indev = wdata->extension.input = input_allocate_device();
+	if (!indev)
 		return -ENOMEM;
 
-	input_set_drvdata(wdata->extension.input, wdata);
-	wdata->extension.input->open = wiimod_classic_open;
-	wdata->extension.input->close = wiimod_classic_close;
-	wdata->extension.input->dev.parent = &wdata->hdev->dev;
-	wdata->extension.input->id.bustype = wdata->hdev->bus;
-	wdata->extension.input->id.vendor = wdata->hdev->vendor;
-	wdata->extension.input->id.product = wdata->hdev->product;
-	wdata->extension.input->id.version = wdata->hdev->version;
+	input_set_drvdata(indev, wdata);
+	indev->open = wiimod_classic_open;
+	indev->close = wiimod_classic_close;
+	indev->dev.parent = &wdata->hdev->dev;
+	indev->id.bustype = wdata->hdev->bus;
+	indev->id.vendor = wdata->hdev->vendor;
+	indev->id.product = wdata->hdev->product;
+	indev->id.version = wdata->hdev->version;
 	if (ext == WIIMOTE_EXT_CLASSIC_CONTROLLER_PRO)
-		wdata->extension.input->name = WIIMOTE_NAME " Classic Controller Pro";
+		indev->name = WIIMOTE_NAME " Classic Controller Pro";
 	else
-		wdata->extension.input->name = WIIMOTE_NAME " Classic Controller";
+		indev->name = WIIMOTE_NAME " Classic Controller";
 
 	for (i = 0; i < WIIMOD_CLASSIC_KEY_NUM; ++i)
-		input_set_capability(wdata->extension.input,
-				     EV_KEY, wiimod_classic_map[i]);
+		input_set_capability(indev, EV_KEY, wiimod_classic_map[i]);
 
-	input_set_capability(wdata->extension.input, EV_ABS, ABS_X);
-	input_set_capability(wdata->extension.input, EV_ABS, ABS_Y);
-	input_set_capability(wdata->extension.input, EV_ABS, ABS_RX);
-	input_set_capability(wdata->extension.input, EV_ABS, ABS_RX);
+	input_set_capability(indev, EV_ABS, ABS_X);
+	input_set_capability(indev, EV_ABS, ABS_Y);
+	input_set_capability(indev, EV_ABS, ABS_RX);
+	input_set_capability(indev, EV_ABS, ABS_RX);
 	/* Triggers are digital, not analog, so we don't report ABS values. */
-	input_set_abs_params(wdata->extension.input,
-			     ABS_X, -24, 24, 1, 2);
-	input_set_abs_params(wdata->extension.input,
-			     ABS_Y, -24, 24, 1, 2);
-	input_set_abs_params(wdata->extension.input,
-			     ABS_RX, -24, 24, 1, 2);
-	input_set_abs_params(wdata->extension.input,
-			     ABS_RY, -24, 24, 1, 2);
+	input_set_abs_params(indev, ABS_X, -24, 24, 1, 2);
+	input_set_abs_params(indev, ABS_Y, -24, 24, 1, 2);
+	input_set_abs_params(indev, ABS_RX, -24, 24, 1, 2);
+	input_set_abs_params(indev, ABS_RY, -24, 24, 1, 2);
 
 	if (ext == WIIMOTE_EXT_CLASSIC_CONTROLLER) {
 		/* Only Classic Controller has analog L/R. */
-		input_set_abs_params(wdata->extension.input,
-				     ABS_HAT1X, 0, 60, 1, 1);
-		input_set_abs_params(wdata->extension.input,
-				     ABS_HAT1Y, 0, 60, 1, 1);
+		input_set_abs_params(indev, ABS_HAT0X, 0, 60, 1, 1);
+		input_set_abs_params(indev, ABS_HAT1X, 0, 60, 1, 1);
 	}
 
-	ret = input_register_device(wdata->extension.input);
-	if (ret)
-		goto err_free;
+	ret = input_register_device(indev);
+	if (ret) {
+		input_free_device(indev);
+		wdata->extension.input = NULL;
+	}
 
-	return 0;
-
-err_free:
-	input_free_device(wdata->extension.input);
-	wdata->extension.input = NULL;
 	return ret;
 }
 
@@ -1550,6 +1535,7 @@ static int wiimod_bboard_probe(const struct wiimod_ops *ops,
 {
 	int ret, i, j;
 	__u8 buf[24], offs;
+	struct input_dev *indev;
 
 	wiimote_cmd_acquire_noint(wdata);
 
@@ -1576,8 +1562,8 @@ static int wiimod_bboard_probe(const struct wiimod_ops *ops,
 		}
 	}
 
-	wdata->extension.input = input_allocate_device();
-	if (!wdata->extension.input)
+	indev = wdata->extension.input = input_allocate_device();
+	if (!indev)
 		return -ENOMEM;
 
 	ret = device_create_file(&wdata->hdev->dev,
@@ -1587,32 +1573,28 @@ static int wiimod_bboard_probe(const struct wiimod_ops *ops,
 		goto err_free;
 	}
 
-	input_set_drvdata(wdata->extension.input, wdata);
-	wdata->extension.input->open = wiimod_bboard_open;
-	wdata->extension.input->close = wiimod_bboard_close;
-	wdata->extension.input->dev.parent = &wdata->hdev->dev;
-	wdata->extension.input->id.bustype = wdata->hdev->bus;
-	wdata->extension.input->id.vendor = wdata->hdev->vendor;
-	wdata->extension.input->id.product = wdata->hdev->product;
-	wdata->extension.input->id.version = wdata->hdev->version;
-	wdata->extension.input->name = WIIMOTE_NAME " Balance Board";
+	input_set_drvdata(indev, wdata);
+	indev->open = wiimod_bboard_open;
+	indev->close = wiimod_bboard_close;
+	indev->dev.parent = &wdata->hdev->dev;
+	indev->id.bustype = wdata->hdev->bus;
+	indev->id.vendor = wdata->hdev->vendor;
+	indev->id.product = wdata->hdev->product;
+	indev->id.version = wdata->hdev->version;
+	indev->name = WIIMOTE_NAME " Balance Board";
 
-	input_set_capability(wdata->extension.input, EV_KEY, BTN_A);
+	input_set_capability(indev, EV_KEY, BTN_A);
 
-	input_set_capability(wdata->extension.input, EV_ABS, ABS_HAT0X);
-	input_set_capability(wdata->extension.input, EV_ABS, ABS_HAT1X);
-	input_set_capability(wdata->extension.input, EV_ABS, ABS_HAT2X);
-	input_set_capability(wdata->extension.input, EV_ABS, ABS_HAT3X);
-	input_set_abs_params(wdata->extension.input,
-			     ABS_HAT0X, 0, 65535, 2, 4);
-	input_set_abs_params(wdata->extension.input,
-			     ABS_HAT1X, 0, 65535, 2, 4);
-	input_set_abs_params(wdata->extension.input,
-			     ABS_HAT2X, 0, 65535, 2, 4);
-	input_set_abs_params(wdata->extension.input,
-			     ABS_HAT3X, 0, 65535, 2, 4);
+	input_set_capability(indev, EV_ABS, ABS_HAT0X);
+	input_set_capability(indev, EV_ABS, ABS_HAT1X);
+	input_set_capability(indev, EV_ABS, ABS_HAT2X);
+	input_set_capability(indev, EV_ABS, ABS_HAT3X);
+	input_set_abs_params(indev, ABS_HAT0X, 0, 65535, 2, 4);
+	input_set_abs_params(indev, ABS_HAT1X, 0, 65535, 2, 4);
+	input_set_abs_params(indev, ABS_HAT2X, 0, 65535, 2, 4);
+	input_set_abs_params(indev, ABS_HAT3X, 0, 65535, 2, 4);
 
-	ret = input_register_device(wdata->extension.input);
+	ret = input_register_device(indev);
 	if (ret)
 		goto err_file;
 
@@ -1622,7 +1604,7 @@ err_file:
 	device_remove_file(&wdata->hdev->dev,
 			   &dev_attr_bboard_calib);
 err_free:
-	input_free_device(wdata->extension.input);
+	input_free_device(indev);
 	wdata->extension.input = NULL;
 	return ret;
 }
@@ -1707,6 +1689,7 @@ static const __u16 wiimod_pro_map[] = {
 
 static void wiimod_pro_in_ext(struct wiimote_data *wdata, const __u8 *ext)
 {
+	struct input_dev *indev = wdata->extension.input;
 	__s16 rx, ry, lx, ly;
 
 	/*   Byte |  8  |  7  |  6  |  5  |  4  |  3  |  2  |  1  |
@@ -1784,66 +1767,66 @@ static void wiimod_pro_in_ext(struct wiimote_data *wdata, const __u8 *ext)
 	rx += wdata->state.calib_pro_sticks[2];
 	ry += wdata->state.calib_pro_sticks[3];
 
-	input_report_abs(wdata->extension.input, ABS_X, lx);
-	input_report_abs(wdata->extension.input, ABS_Y, ly);
-	input_report_abs(wdata->extension.input, ABS_RX, rx);
-	input_report_abs(wdata->extension.input, ABS_RY, ry);
+	input_report_abs(indev, ABS_X, lx);
+	input_report_abs(indev, ABS_Y, ly);
+	input_report_abs(indev, ABS_RX, rx);
+	input_report_abs(indev, ABS_RY, ry);
 
-	input_report_key(wdata->extension.input,
+	input_report_key(indev,
 			 wiimod_pro_map[WIIMOD_PRO_KEY_RIGHT],
 			 !(ext[8] & 0x80));
-	input_report_key(wdata->extension.input,
+	input_report_key(indev,
 			 wiimod_pro_map[WIIMOD_PRO_KEY_DOWN],
 			 !(ext[8] & 0x40));
-	input_report_key(wdata->extension.input,
+	input_report_key(indev,
 			 wiimod_pro_map[WIIMOD_PRO_KEY_TL],
 			 !(ext[8] & 0x20));
-	input_report_key(wdata->extension.input,
+	input_report_key(indev,
 			 wiimod_pro_map[WIIMOD_PRO_KEY_MINUS],
 			 !(ext[8] & 0x10));
-	input_report_key(wdata->extension.input,
+	input_report_key(indev,
 			 wiimod_pro_map[WIIMOD_PRO_KEY_HOME],
 			 !(ext[8] & 0x08));
-	input_report_key(wdata->extension.input,
+	input_report_key(indev,
 			 wiimod_pro_map[WIIMOD_PRO_KEY_PLUS],
 			 !(ext[8] & 0x04));
-	input_report_key(wdata->extension.input,
+	input_report_key(indev,
 			 wiimod_pro_map[WIIMOD_PRO_KEY_TR],
 			 !(ext[8] & 0x02));
 
-	input_report_key(wdata->extension.input,
+	input_report_key(indev,
 			 wiimod_pro_map[WIIMOD_PRO_KEY_ZL],
 			 !(ext[9] & 0x80));
-	input_report_key(wdata->extension.input,
+	input_report_key(indev,
 			 wiimod_pro_map[WIIMOD_PRO_KEY_B],
 			 !(ext[9] & 0x40));
-	input_report_key(wdata->extension.input,
+	input_report_key(indev,
 			 wiimod_pro_map[WIIMOD_PRO_KEY_Y],
 			 !(ext[9] & 0x20));
-	input_report_key(wdata->extension.input,
+	input_report_key(indev,
 			 wiimod_pro_map[WIIMOD_PRO_KEY_A],
 			 !(ext[9] & 0x10));
-	input_report_key(wdata->extension.input,
+	input_report_key(indev,
 			 wiimod_pro_map[WIIMOD_PRO_KEY_X],
 			 !(ext[9] & 0x08));
-	input_report_key(wdata->extension.input,
+	input_report_key(indev,
 			 wiimod_pro_map[WIIMOD_PRO_KEY_ZR],
 			 !(ext[9] & 0x04));
-	input_report_key(wdata->extension.input,
+	input_report_key(indev,
 			 wiimod_pro_map[WIIMOD_PRO_KEY_LEFT],
 			 !(ext[9] & 0x02));
-	input_report_key(wdata->extension.input,
+	input_report_key(indev,
 			 wiimod_pro_map[WIIMOD_PRO_KEY_UP],
 			 !(ext[9] & 0x01));
 
-	input_report_key(wdata->extension.input,
+	input_report_key(indev,
 			 wiimod_pro_map[WIIMOD_PRO_KEY_THUMBL],
 			 !(ext[10] & 0x02));
-	input_report_key(wdata->extension.input,
+	input_report_key(indev,
 			 wiimod_pro_map[WIIMOD_PRO_KEY_THUMBR],
 			 !(ext[10] & 0x01));
 
-	input_sync(wdata->extension.input);
+	input_sync(indev);
 }
 
 static int wiimod_pro_open(struct input_dev *dev)
@@ -1950,6 +1933,7 @@ static int wiimod_pro_probe(const struct wiimod_ops *ops,
 {
 	int ret, i;
 	unsigned long flags;
+	struct input_dev *indev;
 
 	INIT_WORK(&wdata->rumble_worker, wiimod_rumble_worker);
 	wdata->state.calib_pro_sticks[0] = 0;
@@ -1961,14 +1945,14 @@ static int wiimod_pro_probe(const struct wiimod_ops *ops,
 	wdata->state.flags &= ~WIIPROTO_FLAG_PRO_CALIB_DONE;
 	spin_unlock_irqrestore(&wdata->state.lock, flags);
 
-	wdata->extension.input = input_allocate_device();
-	if (!wdata->extension.input)
+	indev = wdata->extension.input = input_allocate_device();
+	if (!indev)
 		return -ENOMEM;
 
-	input_set_capability(wdata->extension.input, EV_FF, FF_RUMBLE);
-	input_set_drvdata(wdata->extension.input, wdata);
+	input_set_capability(indev, EV_FF, FF_RUMBLE);
+	input_set_drvdata(indev, wdata);
 
-	if (input_ff_create_memless(wdata->extension.input, NULL,
+	if (input_ff_create_memless(indev, NULL,
 				    wiimod_pro_play)) {
 		ret = -ENOMEM;
 		goto err_free;
@@ -1981,33 +1965,28 @@ static int wiimod_pro_probe(const struct wiimod_ops *ops,
 		goto err_free;
 	}
 
-	wdata->extension.input->open = wiimod_pro_open;
-	wdata->extension.input->close = wiimod_pro_close;
-	wdata->extension.input->dev.parent = &wdata->hdev->dev;
-	wdata->extension.input->id.bustype = wdata->hdev->bus;
-	wdata->extension.input->id.vendor = wdata->hdev->vendor;
-	wdata->extension.input->id.product = wdata->hdev->product;
-	wdata->extension.input->id.version = wdata->hdev->version;
-	wdata->extension.input->name = WIIMOTE_NAME " Pro Controller";
+	indev->open = wiimod_pro_open;
+	indev->close = wiimod_pro_close;
+	indev->dev.parent = &wdata->hdev->dev;
+	indev->id.bustype = wdata->hdev->bus;
+	indev->id.vendor = wdata->hdev->vendor;
+	indev->id.product = wdata->hdev->product;
+	indev->id.version = wdata->hdev->version;
+	indev->name = WIIMOTE_NAME " Pro Controller";
 
 	for (i = 0; i < WIIMOD_PRO_KEY_NUM; ++i)
-		input_set_capability(wdata->extension.input,
-				     EV_KEY, wiimod_pro_map[i]);
+		input_set_capability(indev, EV_KEY, wiimod_pro_map[i]);
 
-	input_set_capability(wdata->extension.input, EV_ABS, ABS_X);
-	input_set_capability(wdata->extension.input, EV_ABS, ABS_Y);
-	input_set_capability(wdata->extension.input, EV_ABS, ABS_RX);
-	input_set_capability(wdata->extension.input, EV_ABS, ABS_RY);
-	input_set_abs_params(wdata->extension.input,
-			     ABS_X, -0x400, 0x400, 4, 100);
-	input_set_abs_params(wdata->extension.input,
-			     ABS_Y, -0x400, 0x400, 4, 100);
-	input_set_abs_params(wdata->extension.input,
-			     ABS_RX, -0x400, 0x400, 4, 100);
-	input_set_abs_params(wdata->extension.input,
-			     ABS_RY, -0x400, 0x400, 4, 100);
+	input_set_capability(indev, EV_ABS, ABS_X);
+	input_set_capability(indev, EV_ABS, ABS_Y);
+	input_set_capability(indev, EV_ABS, ABS_RX);
+	input_set_capability(indev, EV_ABS, ABS_RY);
+	input_set_abs_params(indev, ABS_X, -0x400, 0x400, 4, 100);
+	input_set_abs_params(indev, ABS_Y, -0x400, 0x400, 4, 100);
+	input_set_abs_params(indev, ABS_RX, -0x400, 0x400, 4, 100);
+	input_set_abs_params(indev, ABS_RY, -0x400, 0x400, 4, 100);
 
-	ret = input_register_device(wdata->extension.input);
+	ret = input_register_device(indev);
 	if (ret)
 		goto err_file;
 
@@ -2017,7 +1996,7 @@ err_file:
 	device_remove_file(&wdata->hdev->dev,
 			   &dev_attr_pro_calib);
 err_free:
-	input_free_device(wdata->extension.input);
+	input_free_device(indev);
 	wdata->extension.input = NULL;
 	return ret;
 }
@@ -2194,63 +2173,55 @@ static int wiimod_drums_probe(const struct wiimod_ops *ops,
 			      unsigned int ext)
 {
 	int ret;
+	struct input_dev *indev;
 
-	wdata->extension.input = input_allocate_device();
-	if (!wdata->extension.input)
+	indev = wdata->extension.input = input_allocate_device();
+	if (!indev)
 		return -ENOMEM;
 
-	input_set_drvdata(wdata->extension.input, wdata);
-	wdata->extension.input->open = wiimod_drums_open;
-	wdata->extension.input->close = wiimod_drums_close;
-	wdata->extension.input->dev.parent = &wdata->hdev->dev;
-	wdata->extension.input->id.bustype = wdata->hdev->bus;
-	wdata->extension.input->id.vendor = wdata->hdev->vendor;
-	wdata->extension.input->id.product = wdata->hdev->product;
-	wdata->extension.input->id.version = wdata->hdev->version;
-	wdata->extension.input->name = WIIMOTE_NAME " Drums";
+	input_set_drvdata(indev, wdata);
+	indev->open = wiimod_drums_open;
+	indev->close = wiimod_drums_close;
+	indev->dev.parent = &wdata->hdev->dev;
+	indev->id.bustype = wdata->hdev->bus;
+	indev->id.vendor = wdata->hdev->vendor;
+	indev->id.product = wdata->hdev->product;
+	indev->id.version = wdata->hdev->version;
+	indev->name = WIIMOTE_NAME " Drums";
 
-	set_bit(EV_KEY, wdata->extension.input->evbit);
-	set_bit(BTN_START, wdata->extension.input->keybit);
-	set_bit(BTN_SELECT, wdata->extension.input->keybit);
+	input_set_capability(indev, EV_KEY, BTN_START);
+	input_set_capability(indev, EV_KEY, BTN_SELECT);
 
-	set_bit(EV_ABS, wdata->extension.input->evbit);
-	set_bit(ABS_X, wdata->extension.input->absbit);
-	set_bit(ABS_Y, wdata->extension.input->absbit);
-	set_bit(ABS_HAT0X, wdata->extension.input->absbit);
-	set_bit(ABS_HAT0Y, wdata->extension.input->absbit);
-	set_bit(ABS_HAT1X, wdata->extension.input->absbit);
-	set_bit(ABS_HAT2X, wdata->extension.input->absbit);
-	set_bit(ABS_HAT2Y, wdata->extension.input->absbit);
-	set_bit(ABS_HAT3X, wdata->extension.input->absbit);
-	set_bit(ABS_HAT3Y, wdata->extension.input->absbit);
-	input_set_abs_params(wdata->extension.input,
-			     ABS_X, -32, 31, 1, 1);
-	input_set_abs_params(wdata->extension.input,
-			     ABS_Y, -32, 31, 1, 1);
-	input_set_abs_params(wdata->extension.input,
-			     ABS_HAT0X, 0, 7, 0, 0);
-	input_set_abs_params(wdata->extension.input,
-			     ABS_HAT0Y, 0, 7, 0, 0);
-	input_set_abs_params(wdata->extension.input,
-			     ABS_HAT1X, 0, 7, 0, 0);
-	input_set_abs_params(wdata->extension.input,
-			     ABS_HAT2X, 0, 7, 0, 0);
-	input_set_abs_params(wdata->extension.input,
-			     ABS_HAT2Y, 0, 7, 0, 0);
-	input_set_abs_params(wdata->extension.input,
-			     ABS_HAT3X, 0, 7, 0, 0);
-	input_set_abs_params(wdata->extension.input,
-			     ABS_HAT3Y, 0, 7, 0, 0);
+	input_set_capability(indev, EV_ABS, ABS_X);
+	input_set_capability(indev, EV_ABS, ABS_Y);
 
-	ret = input_register_device(wdata->extension.input);
-	if (ret)
-		goto err_free;
+	input_set_capability(indev, EV_ABS, ABS_HAT0X);
+	input_set_capability(indev, EV_ABS, ABS_HAT0Y);
+	input_set_capability(indev, EV_ABS, ABS_HAT1X);
+	input_set_capability(indev, EV_ABS, ABS_HAT1Y);
+	input_set_capability(indev, EV_ABS, ABS_HAT2X);
+	input_set_capability(indev, EV_ABS, ABS_HAT2Y);
+	input_set_capability(indev, EV_ABS, ABS_HAT3X);
+	input_set_capability(indev, EV_ABS, ABS_HAT3Y);
 
-	return 0;
 
-err_free:
-	input_free_device(wdata->extension.input);
-	wdata->extension.input = NULL;
+	input_set_abs_params(indev, ABS_X, -32, 31, 1, 1);
+	input_set_abs_params(indev, ABS_Y, -32, 31, 1, 1);
+
+	input_set_abs_params(indev, ABS_HAT0X, 0, 7, 0, 0);
+	input_set_abs_params(indev, ABS_HAT0Y, 0, 7, 0, 0);
+	input_set_abs_params(indev, ABS_HAT1X, 0, 7, 0, 0);
+	input_set_abs_params(indev, ABS_HAT2X, 0, 7, 0, 0);
+	input_set_abs_params(indev, ABS_HAT2Y, 0, 7, 0, 0);
+	input_set_abs_params(indev, ABS_HAT3X, 0, 7, 0, 0);
+	input_set_abs_params(indev, ABS_HAT3Y, 0, 7, 0, 0);
+
+	ret = input_register_device(indev);
+	if (ret) {
+		input_free_device(indev);
+		wdata->extension.input = NULL;
+	}
+
 	return ret;
 }
 
@@ -2307,6 +2278,7 @@ static const __u16 wiimod_guitar_map[] = {
 
 static void wiimod_guitar_in_ext(struct wiimote_data *wdata, const __u8 *ext)
 {
+	struct input_dev *indev = wdata->extension.input;
 	__u8 sx, sy, tb, wb, bd, bm, bp, bo, br, bb, bg, by, bu;
 
 	/*   Byte |  8  |  7  |  6  |  5  |  4  |  3  |  2  |  1  |
@@ -2360,40 +2332,40 @@ static void wiimod_guitar_in_ext(struct wiimote_data *wdata, const __u8 *ext)
 		sy &= 0x3e;
 	}
 
-	input_report_abs(wdata->extension.input, ABS_X, sx - 0x20);
-	input_report_abs(wdata->extension.input, ABS_Y, sy - 0x20);
-	input_report_abs(wdata->extension.input, ABS_HAT0X, tb);
-	input_report_abs(wdata->extension.input, ABS_HAT1X, wb - 0x10);
+	input_report_abs(indev, ABS_X, sx - 0x20);
+	input_report_abs(indev, ABS_Y, sy - 0x20);
+	input_report_abs(indev, ABS_HAT0X, tb);
+	input_report_abs(indev, ABS_HAT1X, wb - 0x10);
 
-	input_report_key(wdata->extension.input,
+	input_report_key(indev,
 			 wiimod_guitar_map[WIIMOD_GUITAR_KEY_G],
 			 bg);
-	input_report_key(wdata->extension.input,
+	input_report_key(indev,
 			 wiimod_guitar_map[WIIMOD_GUITAR_KEY_R],
 			 br);
-	input_report_key(wdata->extension.input,
+	input_report_key(indev,
 			 wiimod_guitar_map[WIIMOD_GUITAR_KEY_Y],
 			 by);
-	input_report_key(wdata->extension.input,
+	input_report_key(indev,
 			 wiimod_guitar_map[WIIMOD_GUITAR_KEY_B],
 			 bb);
-	input_report_key(wdata->extension.input,
+	input_report_key(indev,
 			 wiimod_guitar_map[WIIMOD_GUITAR_KEY_O],
 			 bo);
-	input_report_key(wdata->extension.input,
+	input_report_key(indev,
 			 wiimod_guitar_map[WIIMOD_GUITAR_KEY_UP],
 			 bu);
-	input_report_key(wdata->extension.input,
+	input_report_key(indev,
 			 wiimod_guitar_map[WIIMOD_GUITAR_KEY_DOWN],
 			 bd);
-	input_report_key(wdata->extension.input,
+	input_report_key(indev,
 			 wiimod_guitar_map[WIIMOD_GUITAR_KEY_PLUS],
 			 bp);
-	input_report_key(wdata->extension.input,
+	input_report_key(indev,
 			 wiimod_guitar_map[WIIMOD_GUITAR_KEY_MINUS],
 			 bm);
 
-	input_sync(wdata->extension.input);
+	input_sync(indev);
 }
 
 static int wiimod_guitar_open(struct input_dev *dev)
@@ -2425,50 +2397,43 @@ static int wiimod_guitar_probe(const struct wiimod_ops *ops,
 			       unsigned int ext)
 {
 	int ret, i;
+	struct input_dev *indev;
 
-	wdata->extension.input = input_allocate_device();
-	if (!wdata->extension.input)
+	indev = wdata->extension.input = input_allocate_device();
+	if (!indev)
 		return -ENOMEM;
 
-	input_set_drvdata(wdata->extension.input, wdata);
-	wdata->extension.input->open = wiimod_guitar_open;
-	wdata->extension.input->close = wiimod_guitar_close;
-	wdata->extension.input->dev.parent = &wdata->hdev->dev;
-	wdata->extension.input->id.bustype = wdata->hdev->bus;
-	wdata->extension.input->id.vendor = wdata->hdev->vendor;
-	wdata->extension.input->id.product = wdata->hdev->product;
-	wdata->extension.input->id.version = wdata->hdev->version;
-	wdata->extension.input->name = WIIMOTE_NAME " Guitar";
+	input_set_drvdata(indev, wdata);
+	indev->open = wiimod_guitar_open;
+	indev->close = wiimod_guitar_close;
+	indev->dev.parent = &wdata->hdev->dev;
+	indev->id.bustype = wdata->hdev->bus;
+	indev->id.vendor = wdata->hdev->vendor;
+	indev->id.product = wdata->hdev->product;
+	indev->id.version = wdata->hdev->version;
+	indev->name = WIIMOTE_NAME " Guitar";
 
-	set_bit(EV_KEY, wdata->extension.input->evbit);
 	for (i = 0; i < WIIMOD_GUITAR_KEY_NUM; ++i)
-		set_bit(wiimod_guitar_map[i],
-			wdata->extension.input->keybit);
+		input_set_capability(indev, EV_KEY, wiimod_guitar_map[i]);
 
-	set_bit(EV_ABS, wdata->extension.input->evbit);
-	set_bit(ABS_X, wdata->extension.input->absbit);
-	set_bit(ABS_Y, wdata->extension.input->absbit);
-	set_bit(ABS_HAT0X, wdata->extension.input->absbit);
-	set_bit(ABS_HAT1X, wdata->extension.input->absbit);
-	input_set_abs_params(wdata->extension.input,
-			     ABS_X, -32, 31, 1, 1);
-	input_set_abs_params(wdata->extension.input,
-			     ABS_Y, -32, 31, 1, 1);
-	input_set_abs_params(wdata->extension.input,
-			     ABS_HAT0X, 0, 0x1f, 1, 1);
-	input_set_abs_params(wdata->extension.input,
-			     ABS_HAT1X, 0, 0x0f, 1, 1);
+	input_set_capability(indev, EV_ABS, ABS_X);
+	input_set_capability(indev, EV_ABS, ABS_Y);
+	input_set_capability(indev, EV_ABS, ABS_HAT0X);
+	input_set_capability(indev, EV_ABS, ABS_HAT1X);
 
-	ret = input_register_device(wdata->extension.input);
-	if (ret)
-		goto err_free;
+	input_set_abs_params(indev, ABS_X, -32, 31, 1, 1);
+	input_set_abs_params(indev, ABS_Y, -32, 31, 1, 1);
+	input_set_abs_params(indev, ABS_HAT0X, 0, 0x1f, 1, 1);
+	input_set_abs_params(indev, ABS_HAT1X, 0, 0x0f, 1, 1);
+
+	ret = input_register_device(indev);
+	if (ret) {
+		input_free_device(indev);
+		wdata->extension.input = NULL;
+		return ret;
+	}
 
 	return 0;
-
-err_free:
-	input_free_device(wdata->extension.input);
-	wdata->extension.input = NULL;
-	return ret;
 }
 
 static void wiimod_guitar_remove(const struct wiimod_ops *ops,
@@ -2487,6 +2452,223 @@ static const struct wiimod_ops wiimod_guitar = {
 	.probe = wiimod_guitar_probe,
 	.remove = wiimod_guitar_remove,
 	.in_ext = wiimod_guitar_in_ext,
+};
+
+/*
+ * Turntable
+ * DJ Hero came with a Turntable Controller that was plugged in
+ * as an extension.
+ * We create a separate device for turntables and report all information via this
+ * input device.
+*/
+
+enum wiimod_turntable_keys {
+	WIIMOD_TURNTABLE_KEY_G_RIGHT,
+	WIIMOD_TURNTABLE_KEY_R_RIGHT,
+	WIIMOD_TURNTABLE_KEY_B_RIGHT,
+	WIIMOD_TURNTABLE_KEY_G_LEFT,
+	WIIMOD_TURNTABLE_KEY_R_LEFT,
+	WIIMOD_TURNTABLE_KEY_B_LEFT,
+	WIIMOD_TURNTABLE_KEY_EUPHORIA,
+	WIIMOD_TURNTABLE_KEY_PLUS,
+	WIIMOD_TURNTABLE_KEY_MINUS,
+	WIIMOD_TURNTABLE_KEY_NUM
+};
+
+static const __u16 wiimod_turntable_map[] = {
+	BTN_1,			/* WIIMOD_TURNTABLE_KEY_G_RIGHT */
+	BTN_2,			/* WIIMOD_TURNTABLE_KEY_R_RIGHT */
+	BTN_3,			/* WIIMOD_TURNTABLE_KEY_B_RIGHT */
+	BTN_4,			/* WIIMOD_TURNTABLE_KEY_G_LEFT */
+	BTN_5,			/* WIIMOD_TURNTABLE_KEY_R_LEFT */
+	BTN_6,			/* WIIMOD_TURNTABLE_KEY_B_LEFT */
+	BTN_7,			/* WIIMOD_TURNTABLE_KEY_EUPHORIA */
+	BTN_START,		/* WIIMOD_TURNTABLE_KEY_PLUS */
+	BTN_SELECT,		/* WIIMOD_TURNTABLE_KEY_MINUS */
+};
+
+static void wiimod_turntable_in_ext(struct wiimote_data *wdata, const __u8 *ext)
+{
+	struct input_dev *indev = wdata->extension.input;
+	__u8 be, cs, sx, sy, ed, rtt, rbg, rbr, rbb, ltt, lbg, lbr, lbb, bp, bm;
+	/*
+	 * Byte |  7   |  6  |  5  |  4  |  3  |  2   |  1   |  0     |
+	 *------+------+-----+-----+-----+-----+------+------+--------+
+	 *   0  | RTT<4:3>   |			  SX <5:0>			      |
+	 *   1  | RTT<2:1>   |				  SY <5:0>			      |
+	 *------+------+-----+-----+-----+-----+------+------+--------+
+	 *   2  |RTT<0>|  ED<4:3>  |          CS<3:0>        | RTT<5> |
+	 *------+------+-----+-----+-----+-----+------+------+--------+
+	 *   3  |     ED<2:0>	   |			 LTT<4:0>			  |
+	 *------+------+-----+-----+-----+-----+------+------+--------+
+	 *   4  |  0   |  0  | LBR |  B- |  0  |  B+  |  RBR | LTT<5> |
+	 *------+------+-----+-----+-----+-----+------+------+--------+
+	 *   5  | LBB  |  0  | RBG |  BE | LBG | RBB  | 0    | 0      |
+	 *------+------+-----+-----+-----+-----+------+------+--------+
+	 * All pressed buttons are 0
+	 *
+	 * With Motion+ enabled, it will look like this:
+	 * Byte |  8   |  7  |  6  |  5  |  4  |  3   |  2   |  1     |
+	 *------+------+-----+-----+-----+-----+------+------+--------+
+	 *   1  | RTT<4:3>   |			  SX <5:1>		 |	  0   |
+	 *   2  | RTT<2:1>   |				  SY <5:1>		 |	  0   |
+	 *------+------+-----+-----+-----+-----+------+------+--------+
+	 *   3  |RTT<0>|  ED<4:3>  |          CS<3:0>        | RTT<5> |
+	 *------+------+-----+-----+-----+-----+------+------+--------+
+	 *   4  |     ED<2:0>	   |			 LTT<4:0>			  |
+	 *------+------+-----+-----+-----+-----+------+------+--------+
+	 *   5  |  0   |  0  | LBR |  B- |  0  |  B+  | RBR  |  XXXX  |
+	 *------+------+-----+-----+-----+-----+------+------+--------+
+	 *   6  | LBB  |  0  | RBG |  BE | LBG | RBB  | XXXX |  XXXX  |
+	 *------+------+-----+-----+-----+-----+------+------+--------+
+	 */
+
+	be = !(ext[5] & 0x10);
+	cs = ((ext[2] & 0x1e));
+	sx = ext[0] & 0x3f;
+	sy = ext[1] & 0x3f;
+	ed = (ext[3] & 0xe0) >> 5;
+	rtt = ((ext[2] & 0x01) << 5 | (ext[0] & 0xc0) >> 3 | (ext[1] & 0xc0) >> 5 | ( ext[2] & 0x80 ) >> 7);
+	ltt = ((ext[4] & 0x01) << 5 | (ext[3] & 0x1f));
+	rbg = !(ext[5] & 0x20);
+	rbr = !(ext[4] & 0x02);
+	rbb = !(ext[5] & 0x04);
+	lbg = !(ext[5] & 0x08);
+	lbb = !(ext[5] & 0x80);
+	lbr = !(ext[4] & 0x20);
+	bm =  !(ext[4] & 0x10);
+	bp =  !(ext[4] & 0x04);
+
+	if (wdata->state.flags & WIIPROTO_FLAG_MP_ACTIVE) {
+		ltt = (ext[4] & 0x01) << 5;
+		sx &= 0x3e;
+		sy &= 0x3e;
+	}
+
+	input_report_abs(indev, ABS_X, sx);
+	input_report_abs(indev, ABS_Y, sy);
+	input_report_abs(indev, ABS_HAT0X, rtt);
+	input_report_abs(indev, ABS_HAT1X, ltt);
+	input_report_abs(indev, ABS_HAT2X, cs);
+	input_report_abs(indev, ABS_HAT3X, ed);
+	input_report_key(indev,
+			 wiimod_turntable_map[WIIMOD_TURNTABLE_KEY_G_RIGHT],
+			 rbg);
+	input_report_key(indev,
+			 wiimod_turntable_map[WIIMOD_TURNTABLE_KEY_R_RIGHT],
+			 rbr);
+	input_report_key(indev,
+			 wiimod_turntable_map[WIIMOD_TURNTABLE_KEY_B_RIGHT],
+			 rbb);
+	input_report_key(indev,
+			 wiimod_turntable_map[WIIMOD_TURNTABLE_KEY_G_LEFT],
+			 lbg);
+	input_report_key(indev,
+			 wiimod_turntable_map[WIIMOD_TURNTABLE_KEY_R_LEFT],
+			 lbr);
+	input_report_key(indev,
+			 wiimod_turntable_map[WIIMOD_TURNTABLE_KEY_B_LEFT],
+			 lbb);
+	input_report_key(indev,
+			 wiimod_turntable_map[WIIMOD_TURNTABLE_KEY_EUPHORIA],
+			 be);
+	input_report_key(indev,
+			 wiimod_turntable_map[WIIMOD_TURNTABLE_KEY_PLUS],
+			 bp);
+	input_report_key(indev,
+			 wiimod_turntable_map[WIIMOD_TURNTABLE_KEY_MINUS],
+			 bm);
+
+	input_sync(indev);
+}
+
+static int wiimod_turntable_open(struct input_dev *dev)
+{
+	struct wiimote_data *wdata = input_get_drvdata(dev);
+	unsigned long flags;
+
+	spin_lock_irqsave(&wdata->state.lock, flags);
+	wdata->state.flags |= WIIPROTO_FLAG_EXT_USED;
+	wiiproto_req_drm(wdata, WIIPROTO_REQ_NULL);
+	spin_unlock_irqrestore(&wdata->state.lock, flags);
+
+	return 0;
+}
+
+static void wiimod_turntable_close(struct input_dev *dev)
+{
+	struct wiimote_data *wdata = input_get_drvdata(dev);
+	unsigned long flags;
+
+	spin_lock_irqsave(&wdata->state.lock, flags);
+	wdata->state.flags &= ~WIIPROTO_FLAG_EXT_USED;
+	wiiproto_req_drm(wdata, WIIPROTO_REQ_NULL);
+	spin_unlock_irqrestore(&wdata->state.lock, flags);
+}
+
+static int wiimod_turntable_probe(const struct wiimod_ops *ops,
+				  struct wiimote_data *wdata,
+				  unsigned int ext)
+{
+	int ret, i;
+	struct input_dev *indev;
+
+	indev = wdata->extension.input = input_allocate_device();
+	if (!indev)
+		return -ENOMEM;
+
+	input_set_drvdata(indev, wdata);
+	indev->open = wiimod_turntable_open;
+	indev->close = wiimod_turntable_close;
+	indev->dev.parent = &wdata->hdev->dev;
+	indev->id.bustype = wdata->hdev->bus;
+	indev->id.vendor = wdata->hdev->vendor;
+	indev->id.product = wdata->hdev->product;
+	indev->id.version = wdata->hdev->version;
+	indev->name = WIIMOTE_NAME " Turntable";
+
+	for (i = 0; i < WIIMOD_TURNTABLE_KEY_NUM; ++i)
+		input_set_capability(indev, EV_KEY, wiimod_turntable_map[i]);
+
+	input_set_capability(indev, EV_ABS, ABS_X);
+	input_set_capability(indev, EV_ABS, ABS_Y);
+	input_set_capability(indev, EV_ABS, ABS_HAT0X);
+	input_set_capability(indev, EV_ABS, ABS_HAT1X);
+	input_set_capability(indev, EV_ABS, ABS_HAT2X);
+	input_set_capability(indev, EV_ABS, ABS_HAT3X);
+
+	input_set_abs_params(indev, ABS_X, 0, 63, 1, 0);
+	input_set_abs_params(indev, ABS_Y, 63, 0, 1, 0);
+	input_set_abs_params(indev, ABS_HAT0X, -8, 8, 0, 0);
+	input_set_abs_params(indev, ABS_HAT1X, -8, 8, 0, 0);
+	input_set_abs_params(indev, ABS_HAT2X, 0, 31, 1, 1);
+	input_set_abs_params(indev, ABS_HAT3X, 0, 7, 0, 0);
+
+	ret = input_register_device(indev);
+	if (ret) {
+		input_free_device(indev);
+		wdata->extension.input = NULL;
+	}
+
+	return ret;
+}
+
+static void wiimod_turntable_remove(const struct wiimod_ops *ops,
+				    struct wiimote_data *wdata)
+{
+	if (!wdata->extension.input)
+		return;
+
+	input_unregister_device(wdata->extension.input);
+	wdata->extension.input = NULL;
+}
+
+static const struct wiimod_ops wiimod_turntable = {
+	.flags = 0,
+	.arg = 0,
+	.probe = wiimod_turntable_probe,
+	.remove = wiimod_turntable_remove,
+	.in_ext = wiimod_turntable_in_ext,
 };
 
 /*
@@ -2682,12 +2864,9 @@ static int wiimod_mp_probe(const struct wiimod_ops *ops,
 	input_set_capability(wdata->mp, EV_ABS, ABS_RY);
 	input_set_capability(wdata->mp, EV_ABS, ABS_RZ);
 
-	input_set_abs_params(wdata->mp,
-			     ABS_RX, -16000, 16000, 4, 8);
-	input_set_abs_params(wdata->mp,
-			     ABS_RY, -16000, 16000, 4, 8);
-	input_set_abs_params(wdata->mp,
-			     ABS_RZ, -16000, 16000, 4, 8);
+	input_set_abs_params(wdata->mp, ABS_RX, -16000, 16000, 4, 8);
+	input_set_abs_params(wdata->mp, ABS_RY, -16000, 16000, 4, 8);
+	input_set_abs_params(wdata->mp, ABS_RZ, -16000, 16000, 4, 8);
 	/*
 	  Linux convention:
 	  When INPUT_PROP_ACCELEROMETER is set the resolution changes.
@@ -2758,6 +2937,7 @@ const struct wiimod_ops *wiimod_ext_table[WIIMOTE_EXT_NUM] = {
 	[WIIMOTE_EXT_PRO_CONTROLLER] = &wiimod_pro,
 	[WIIMOTE_EXT_DRUMS] = &wiimod_drums,
 	[WIIMOTE_EXT_GUITAR] = &wiimod_guitar,
+	[WIIMOTE_EXT_TURNTABLE] = &wiimod_turntable,
 };
 
 
