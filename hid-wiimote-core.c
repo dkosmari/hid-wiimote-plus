@@ -1797,6 +1797,8 @@ static void wiimote_destroy(struct wiimote_data *wdata)
 	cancel_work_sync(&wdata->queue.worker);
 	hid_hw_close(wdata->hdev);
 	hid_hw_stop(wdata->hdev);
+
+	devm_kfree(&wdata->hdev->dev, wdata);
 }
 
 static int wiimote_hid_probe(struct hid_device *hdev,
@@ -1844,8 +1846,10 @@ static int wiimote_hid_probe(struct hid_device *hdev,
 	}
 
 	ret = wiidebug_init(wdata);
-	if (ret)
-		goto err_free;
+	if (ret) {
+		wiimote_destroy(wdata);
+		return ret;
+	}
 
 	hid_info(hdev, "New device registered\n");
 
@@ -1853,10 +1857,6 @@ static int wiimote_hid_probe(struct hid_device *hdev,
 	wiimote_schedule(wdata);
 
 	return 0;
-
-err_free:
-	wiimote_destroy(wdata);
-	return ret;
 
 err_ext:
 	device_remove_file(&wdata->hdev->dev, &dev_attr_extension);
@@ -1867,6 +1867,7 @@ err_stop:
 err:
 	input_free_device(wdata->ir);
 	input_free_device(wdata->accel);
+	devm_kfree(&wdata->hdev->dev, wdata);
 	return ret;
 }
 
@@ -1880,9 +1881,9 @@ static void wiimote_hid_remove(struct hid_device *hdev)
 
 static const struct hid_device_id wiimote_hid_devices[] = {
 	{ HID_BLUETOOTH_DEVICE(USB_VENDOR_ID_NINTENDO,
-				USB_DEVICE_ID_NINTENDO_WIIMOTE) },
+			       USB_DEVICE_ID_NINTENDO_WIIMOTE) },
 	{ HID_BLUETOOTH_DEVICE(USB_VENDOR_ID_NINTENDO,
-				USB_DEVICE_ID_NINTENDO_WIIMOTE2) },
+			       USB_DEVICE_ID_NINTENDO_WIIMOTE2) },
 	{ }
 };
 

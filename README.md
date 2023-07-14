@@ -5,41 +5,29 @@ This is a modification of the built-in Linux kernel module for Nintendo Wii remo
 a drop-in replacement for the original module.
 
 
-How is it different?
---------------------
+How is it different from the original Linux driver?
+---------------------------------------------------
 
-1. The mapping from Wii remotes (and accessories) buttons and axes was modified to respect
-   the Linux kernel conventions, and behave like gamepads, instead of a mixture of gamepad
-   and keyboard. For convenience, [gamepad.rst](gamepad.rst) from the Linux docs is
-   included here.
+The original driver does not follow the [Linux input conventions](gamepad.rst). This table shows how
+the inputs are handled differently:
 
-   - D-pad buttons are now mapped to `BTN_DPAD_*` events, instead of keyboard arrow keys.
+| Input | hid-wiimote (original) | hid-wiimote-plus | Why |
+| :---- | :----------------------| :--------------- | :-- |
+| Remote d-pad | Mapped to keyboard arrows. | Mapped to `BTN_DPAD_*` buttons. | It's a gamepad, not a keyboard. |
+| Plus/minus buttons | Mapped to keyboard "next/prev" multimedia keys. | Mapped to `BTN_START`/`BTN_SELECT`. | The plus/minus buttons are used as start/select, sometimes it's even written on the button. |
+| Sticks | Inverted Y axis. | Normal Y axis. | The Linux docs say negative Y means "up", positive Y means "down". |
+| CC and CCPro | Face buttons are mapped to button names (A, B, X, Y). | Face buttons are mapped to directions (north, south, east, west). | The Linux docs say face buttons in a diamond layout should be mapped to the directions. |
+| CCPro | Bogus analog TL/TR triggers. | Does not have analog TL/TR triggers. | A device should not report triggers it doesn't have. |
+| Balance Board | The 4 pressure sensors are combined as a pair of 2-D axes. | The 4 pressure sensors are reported as 4 separated axes. | The pressure sensors do not represent position in any way, they shouldn't be reported as such. |
+| Accelerometer | Does not report `INPUT_PROP_ACCELEROMETER` and uses the wrong axes (RX, RY, RZ). | Reports `INPUT_PROP_ACCELEROMETER`, and uses the correct axes (X, Y, Z). | For "accelerometer" inputs, the left axes are reserved for linear acceleration, the right axes are for angular acceleration. |
+| Motion Plus | Does not report `INPUT_PROP_ACCELEROMETER`. | Reports `INPUT_PROP_ACCELEROMETER`. | Applications won't be fooled into thinking it's a positional input. |
+| CC and CCPro | Has an option to emulate the left stick with the d-pad. | Does not have this option. | Emulating/remapping input does not belong to a device driver. |
 
-   - Buttons `+/Start` and `-/Select` are now mapped to `BTN_START` and `BTN_SELECT`.
+Battery charge reporting has been slightly improved.
 
-   - Face/action buttons are now mapped to east, south, north, west buttons.
+Memory allocations are now managed by the device node; this ensures all memory is
+deallocated when the device disconnects.
 
-2. Better battery status reporting, to make it interact more nicely with desktop
-   environments.
-
-3. Memory allocation is done in the device's scope, so it's guaranteed to be released when
-   the device is removed.
-
-4. Accelerometer and gyro devices report proper metadata
-   (`INPUT_PROP_ACCELEROMETER` and correct units.)
-
-5. Sticks (Nunchuk and Classic Controller) don't invert the Y axis anymore. Positive
-   values mean "down."
-
-6. Classic Controller Pro no longer reports analog shoulder buttons (`L/R`), only
-   the Classic Controller (not Pro) has them. Range for analog shoulder buttons
-   has been corrected from `[-30, +30]` to `[0, +60]`.
-
-7. Balance Board reports its sensors as `HAT0X`, `HAT1X`, `HAT2X`, `HAT3X`; that is,
-   four 1-D axes instead of two 2-D axes.
-
-8. No more emulation of an analog stick through the d-pad. A device driver is not supposed
-   to create fake inputs that confuse applications.
 
 
 How to install?
@@ -58,7 +46,8 @@ To uninstall, use:
     sudo make uninstall
 
 
-If you just want to test it, without installing it, use these commands instead:
+If you just want to test it, without installing it, use these commands instead (DKMS is
+not needed in this case):
 
     make
     sudo rmmod hid-wiimote
@@ -71,3 +60,8 @@ Permission issues
 The script [99-wiimote.rules](99-wiimote.rules) is installed automatically to
 `/etc/udev/rules.d`. If that script is not present, or conflicts with other scripts, you
 may end up with devices missing the `ID_INPUT_JOYSTICK` tag, or with wrong permissions.
+
+A simple way to test if the device is accessible is to use the `evemu` package; run either
+`evemu-describe` or `evemu-record`, and see if it can access your devices. If a device
+only appears when you run these commands with root/sudo permissions, that means you need
+to tweak the udev rule.
