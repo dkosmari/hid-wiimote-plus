@@ -235,4 +235,5 @@ void wiidebug_deinit(struct wiimote_data *wdata) { }
 
 /* Local Variables:    */
 /* indent-tabs-mode: t */
+/* c-basic-offset: 8   */
 /* End:                */
