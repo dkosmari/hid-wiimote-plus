@@ -5,8 +5,6 @@
  * Copyright (c) 2019-2023 Daniel K. O.
  */
 
-/*
- */
 
 #include <linux/completion.h>
 #include <linux/device.h>
@@ -15,6 +13,7 @@
 #include <linux/module.h>
 #include <linux/mutex.h>
 #include <linux/spinlock.h>
+#include <linux/version.h>
 
 #include "hid-wiimote.h"
 
@@ -1182,7 +1181,11 @@ static void wiimote_init_hotplug(struct wiimote_data *wdata)
 		wiimote_cmd_release(wdata);
 
 		/* delete MP hotplug timer */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 2, 0)
+		timer_shutdown_sync(&wdata->timer);
+#else
 		del_timer_sync(&wdata->timer);
+#endif
 	} else {
 		/* reschedule MP hotplug timer */
 		if (!(flags & WIIPROTO_FLAG_BUILTIN_MP) &&
@@ -1786,7 +1789,11 @@ static void wiimote_destroy(struct wiimote_data *wdata)
 	spin_unlock_irqrestore(&wdata->state.lock, flags);
 
 	cancel_work_sync(&wdata->init_worker);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 2, 0)
 	timer_shutdown_sync(&wdata->timer);
+#else
+	del_timer_sync(&wdata->timer);
+#endif
 
 	device_remove_file(&wdata->hdev->dev, &dev_attr_devtype);
 	device_remove_file(&wdata->hdev->dev, &dev_attr_extension);
