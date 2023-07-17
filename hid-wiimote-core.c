@@ -366,7 +366,7 @@ void wiiproto_req_rmem(struct wiimote_data *wdata, bool eeprom,
 
 /* requries the cmd-mutex to be held */
 int wiimote_cmd_write(struct wiimote_data *wdata, __u32 offset,
-						const __u8 *wmem, __u8 size)
+		      const __u8 *wmem, __u8 size)
 {
 	unsigned long flags;
 	int ret;
@@ -385,7 +385,7 @@ int wiimote_cmd_write(struct wiimote_data *wdata, __u32 offset,
 
 /* requries the cmd-mutex to be held */
 ssize_t wiimote_cmd_read(struct wiimote_data *wdata, __u32 offset, __u8 *rmem,
-								__u8 size)
+			 __u8 size)
 {
 	unsigned long flags;
 	ssize_t ret;
@@ -1459,6 +1459,8 @@ static void handler_status(struct wiimote_data *wdata, const __u8 *payload)
 	}
 
 	wdata->state.cmd_battery = payload[5];
+	wdata->state.cmd_battery_crit = payload[2] & 0x01;
+
 	if (wiimote_cmd_pending(wdata, WIIPROTO_REQ_SREQ, 0))
 		wiimote_cmd_complete(wdata);
 }

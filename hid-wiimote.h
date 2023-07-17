@@ -47,9 +47,9 @@
 #define WIIPROTO_FLAG_PRO_CALIB_DONE	0x040000
 
 #define WIIPROTO_FLAGS_LEDS (WIIPROTO_FLAG_LED1 | WIIPROTO_FLAG_LED2 | \
-					WIIPROTO_FLAG_LED3 | WIIPROTO_FLAG_LED4)
+			     WIIPROTO_FLAG_LED3 | WIIPROTO_FLAG_LED4)
 #define WIIPROTO_FLAGS_IR (WIIPROTO_FLAG_IR_BASIC | WIIPROTO_FLAG_IR_EXT | \
-							WIIPROTO_FLAG_IR_FULL)
+			   WIIPROTO_FLAG_IR_FULL)
 
 /* return flag for led \num */
 #define WIIPROTO_FLAG_LED(num) (WIIPROTO_FLAG_LED1 << (num - 1))
@@ -132,6 +132,7 @@ struct wiimote_state {
 
 	/* results of synchronous requests */
 	__u8 cmd_battery;
+	bool cmd_battery_crit;
 	__u8 cmd_err;
 	__u8 *cmd_read_buf;
 	__u8 cmd_read_size;
@@ -274,14 +275,14 @@ extern void wiiproto_req_ir2(struct wiimote_data *wdata, __u8 flags);
 extern int wiimote_cmd_write(struct wiimote_data *wdata, __u32 offset,
 						const __u8 *wmem, __u8 size);
 extern ssize_t wiimote_cmd_read(struct wiimote_data *wdata, __u32 offset,
-							__u8 *rmem, __u8 size);
+				__u8 *rmem, __u8 size);
 
 #define wiiproto_req_rreg(wdata, os, sz) \
-				wiiproto_req_rmem((wdata), false, (os), (sz))
+	wiiproto_req_rmem((wdata), false, (os), (sz))
 #define wiiproto_req_reeprom(wdata, os, sz) \
-				wiiproto_req_rmem((wdata), true, (os), (sz))
+	wiiproto_req_rmem((wdata), true, (os), (sz))
 extern void wiiproto_req_rmem(struct wiimote_data *wdata, bool eeprom,
-						__u32 offset, __u16 size);
+			      __u32 offset, __u16 size);
 
 extern int wiidebug_init(struct wiimote_data *wdata);
 extern void wiidebug_deinit(struct wiimote_data *wdata);
@@ -366,6 +367,7 @@ static inline int wiimote_cmd_wait_noint(struct wiimote_data *wdata)
 	else
 		return 0;
 }
+
 
 #endif
 

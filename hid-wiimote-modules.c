@@ -229,6 +229,11 @@ static int wiimod_battery_request_update(struct wiimote_data *wdata,
 
 	spin_lock_irqsave(&wdata->state.lock, flags);
 	*value = wdata->state.cmd_battery;
+	if (wdata->state.cmd_battery_crit) {
+		*value = - *value;
+		if (!*value)
+			*value = -1;
+	}
 	spin_unlock_irqrestore(&wdata->state.lock, flags);
 
 	return 0;
@@ -254,13 +259,17 @@ static int wiimod_battery_get_property(struct power_supply *psy,
 		ret = wiimod_battery_request_update(wdata, &state);
 		if (ret)
 			return ret;
+		if (state < 0)
+			state = -state;
 		val->intval = state;
 		return 0;
 	case POWER_SUPPLY_PROP_CAPACITY_LEVEL:
 		ret = wiimod_battery_request_update(wdata, &state);
 		if (ret)
 			return ret;
-		if (state >= 80)
+		if (state < 0)
+			val->intval = POWER_SUPPLY_CAPACITY_LEVEL_CRITICAL;
+		else if (state >= 80)
 			val->intval = POWER_SUPPLY_CAPACITY_LEVEL_FULL;
 		else if (state >= 60)
 			val->intval = POWER_SUPPLY_CAPACITY_LEVEL_HIGH;

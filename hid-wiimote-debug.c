@@ -133,7 +133,7 @@ static ssize_t wiidebug_drm_write(struct file *f, const char __user *u,
 	char buf[16];
 	ssize_t len;
 	int i;
-
+	
 	if (s == 0)
 		return -EINVAL;
 

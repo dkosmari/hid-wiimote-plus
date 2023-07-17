@@ -30,14 +30,14 @@ deallocated when the device disconnects.
 
 
 
-How to install?
----------------
+Installation
+------------
 
 You will need the kernel development headers in your system. Additionally, you will need
-the DKMS package; it allows for easy install and uninstall, and will automatically rebuild
-the module when the kernel is updated.
+the **DKMS** package; it allows for easy install and uninstall, and will automatically
+rebuild the module when the kernel is updated.
 
-Use the commands:
+Use the command:
 
     sudo make install
 
@@ -50,7 +50,7 @@ If you just want to test it, without installing it, use these commands instead (
 not needed in this case):
 
     make
-    sudo rmmod hid-wiimote
+    sudo rmmod hid-wiimote # unload current hid-wiimote module
     sudo insmod ./hid-wiimote.ko
 
 
