@@ -1,12 +1,26 @@
-SUBSYSTEM=="input", ATTRS{name}=="Nintendo Wii Remote Accelerometer", MODE="0666", ENV{ID_INPUT_JOYSTICK}="1"
-SUBSYSTEM=="input", ATTRS{name}=="Nintendo Wii Remote Balance Board", MODE="0666", ENV{ID_INPUT_JOYSTICK}="1"
-SUBSYSTEM=="input", ATTRS{name}=="Nintendo Wii Remote Classic Controller Pro", MODE="0666", ENV{ID_INPUT_JOYSTICK}="1"
-SUBSYSTEM=="input", ATTRS{name}=="Nintendo Wii Remote Classic Controller", MODE="0666", ENV{ID_INPUT_JOYSTICK}="1"
-SUBSYSTEM=="input", ATTRS{name}=="Nintendo Wii Remote Drums", MODE="0666", ENV{ID_INPUT_JOYSTICK}="1"
-SUBSYSTEM=="input", ATTRS{name}=="Nintendo Wii Remote Guitar", MODE="0666", ENV{ID_INPUT_JOYSTICK}="1"
-SUBSYSTEM=="input", ATTRS{name}=="Nintendo Wii Remote IR", MODE="0666", ENV{ID_INPUT_JOYSTICK}="1"
-SUBSYSTEM=="input", ATTRS{name}=="Nintendo Wii Remote Motion Plus", MODE="0666", ENV{ID_INPUT_JOYSTICK}="1"
-SUBSYSTEM=="input", ATTRS{name}=="Nintendo Wii Remote Nunchuk", MODE="0666", ENV{ID_INPUT_JOYSTICK}="1"
-SUBSYSTEM=="input", ATTRS{name}=="Nintendo Wii Remote Pro Controller", MODE="0666", ENV{ID_INPUT_JOYSTICK}="1"
-SUBSYSTEM=="input", ATTRS{name}=="Nintendo Wii Remote Turntable", MODE="0666", ENV{ID_INPUT_JOYSTICK}="1"
-SUBSYSTEM=="input", ATTRS{name}=="Nintendo Wii Remote", MODE="0666", ENV{ID_INPUT_JOYSTICK}="1"
+SUBSYSTEM=="input", ATTR{name}=="Nintendo Wii Remote", MODE="0666", ENV{ID_INPUT_JOYSTICK}="1"
+### To stop it from generating events, use the rule below instead:
+#SUBSYSTEM=="input", ATTR{name}=="Nintendo Wii Remote", ATTR{inhibited}="1"
+
+#SUBSYSTEM=="input", ATTR{name}=="Nintendo Wii Remote IR", MODE="0666", ENV{ID_INPUT_JOYSTICK}="1"
+### To stop it from generating events, use the rule below instead:
+SUBSYSTEM=="input", ATTR{name}=="Nintendo Wii Remote IR", ATTR{inhibited}="1"
+
+#SUBSYSTEM=="input", ATTR{name}=="Nintendo Wii Remote Accelerometer", MODE="0666", ENV{ID_INPUT_JOYSTICK}="1"
+### To stop it from generating events, use the rule below instead:
+SUBSYSTEM=="input", ATTR{name}=="Nintendo Wii Remote Accelerometer", ATTR{inhibited}="1"
+
+#SUBSYSTEM=="input", ATTR{name}=="Nintendo Wii Remote Motion Plus", MODE="0666", ENV{ID_INPUT_JOYSTICK}="1"
+### To stop it from generating events, use the rule below instead:
+SUBSYSTEM=="input", ATTR{name}=="Nintendo Wii Remote Motion Plus", ATTR{inhibited}="1"
+
+
+### The ones below don't don't need inhibit rules, as you can just disconnect them.
+SUBSYSTEM=="input", ATTR{name}=="Nintendo Wii Remote Balance Board", MODE="0666", ENV{ID_INPUT_JOYSTICK}="1"
+SUBSYSTEM=="input", ATTR{name}=="Nintendo Wii Remote Classic Controller Pro", MODE="0666", ENV{ID_INPUT_JOYSTICK}="1"
+SUBSYSTEM=="input", ATTR{name}=="Nintendo Wii Remote Classic Controller", MODE="0666", ENV{ID_INPUT_JOYSTICK}="1"
+SUBSYSTEM=="input", ATTR{name}=="Nintendo Wii Remote Drums", MODE="0666", ENV{ID_INPUT_JOYSTICK}="1"
+SUBSYSTEM=="input", ATTR{name}=="Nintendo Wii Remote Guitar", MODE="0666", ENV{ID_INPUT_JOYSTICK}="1"
+SUBSYSTEM=="input", ATTR{name}=="Nintendo Wii Remote Nunchuk", MODE="0666", ENV{ID_INPUT_JOYSTICK}="1"
+SUBSYSTEM=="input", ATTR{name}=="Nintendo Wii Remote Pro Controller", MODE="0666", ENV{ID_INPUT_JOYSTICK}="1"
+SUBSYSTEM=="input", ATTR{name}=="Nintendo Wii Remote Turntable", MODE="0666", ENV{ID_INPUT_JOYSTICK}="1"

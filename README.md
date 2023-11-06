@@ -54,14 +54,33 @@ not needed in this case):
     sudo insmod ./hid-wiimote.ko
 
 
-Permission issues
------------------
+Udev rules
+----------
 
 The script [99-wiimote.rules](99-wiimote.rules) is installed automatically to
-`/etc/udev/rules.d`. If that script is not present, or conflicts with other scripts, you
-may end up with devices missing the `ID_INPUT_JOYSTICK` tag, or with wrong permissions.
+`/etc/udev/rules.d`. It forces most devices to have global read/write permissions
+(`MODE="0666"`) and tags them to be game input devices (`ENV{ID_INPUT_JOYSTICK}="1"`) with
+rules like this:
 
-A simple way to test if the device is accessible is to use the `evemu` package; run either
-`evemu-describe` or `evemu-record`, and see if it can access your devices. If a device
-only appears when you run these commands with root/sudo permissions, that means you need
-to tweak the udev rule.
+```
+SUBSYSTEM=="input", ATTR{name}=="Nintendo Wii Remote", MODE="0666", ENV{ID_INPUT_JOYSTICK}="1"
+```
+
+To inhibit a particular device (that is, stop it from generating input events), a
+different rule is used:
+
+```
+SUBSYSTEM=="input", ATTR{name}=="Nintendo Wii Remote IR", ATTR{inhibited}="1"
+```
+
+This may be necessary for games that cannot handle accelerometer or gyro data
+correctly. Some games may also keep reading from all available devices even when they're
+not used, which increases power consumption.
+
+**By default, accelerometer, gyro and IR inputs are all inhibited.** This will cause the
+least amount of headaches. Edit `/etc/udev/rules.d/99-wiimote.rules` if you want to enable
+one of these devices; changes to the udev rules will take effect next time the device is
+connected.
+
+You can use the `evemu-record` command from the `evemu` package to test if a device is
+working as intended.
