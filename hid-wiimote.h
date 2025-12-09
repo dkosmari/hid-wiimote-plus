@@ -1,15 +1,11 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
-#ifndef __HID_WIIMOTE_H
-#define __HID_WIIMOTE_H
-
 /*
  * HID driver for Nintendo Wii / Wii U peripherals
  * Copyright (c) 2011-2013 David Herrmann <dh.herrmann@gmail.com>
  * Copyright (c) 2018-2023 Daniel K. O.
  */
-
-/*
- */
+#ifndef __HID_WIIMOTE_H
+#define __HID_WIIMOTE_H
 
 #include <linux/completion.h>
 #include <linux/device.h>
@@ -115,6 +111,12 @@ struct wiimote_queue {
 	struct wiimote_buf outq[WIIMOTE_BUFSIZE];
 };
 
+struct wiimote_bboard_pressure_cal {
+	__u16 val_0Kg;
+	__u16 val_17Kg;
+	__u16 val_34Kg;
+};
+
 struct wiimote_state {
 	spinlock_t lock;
 	__u32 flags;
@@ -138,7 +140,16 @@ struct wiimote_state {
 	__u8 cmd_read_size;
 
 	/* calibration/cache data */
-	__u16 calib_bboard[4][3];
+	union {
+		struct {
+			__u8 battery;
+			__u8 temperature;
+			struct wiimote_bboard_pressure_cal top_r;
+			struct wiimote_bboard_pressure_cal bot_r;
+			struct wiimote_bboard_pressure_cal top_l;
+			struct wiimote_bboard_pressure_cal bot_l;
+		} bboard;
+	} calib;
 	__s16 calib_pro_sticks[4];
 	__u8 pressure_drums[7];
 	__u8 cache_rumble;
@@ -184,9 +195,11 @@ enum wiimod_module {
 	WIIMOD_NULL = WIIMOD_NUM,
 };
 
-#define WIIMOD_FLAG_INPUT		0x0001
-#define WIIMOD_FLAG_EXT8		0x0002
-#define WIIMOD_FLAG_EXT16		0x0004
+enum wiimod_flag {
+	WIIMOD_FLAG_INPUT = 0x0001,
+	WIIMOD_FLAG_EXT8 = 0x0002,
+	WIIMOD_FLAG_EXT16 = 0x0004,
+};
 
 struct wiimod_ops {
 	__u16 flags;

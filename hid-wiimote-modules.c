@@ -35,7 +35,16 @@
 #include <linux/hid.h>
 #include <linux/input.h>
 #include <linux/spinlock.h>
+#include <linux/version.h>
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 10, 0)
+#include <linux/fpu.h>
+#define WIIMOTE_ENALE_FPU
+#endif
+
 #include "hid-wiimote.h"
+#include "hid-wiimote-flt.h"
+
 
 /*
  * Keys
@@ -1377,8 +1386,8 @@ static const struct wiimod_ops wiimod_classic = {
  * Some 3rd party devices react allergic if we try to access normal Wii Remote
  * hardware, so this extension module should be the only module that is loaded
  * on balance boards.
- * The balance board needs 8 bytes extension data instead of basic 6 bytes so
- * it needs the WIIMOD_FLAG_EXT8 flag.
+ * The balance board needs 11 bytes extension data instead of basic 6 bytes so
+ * we set the report mode to WIIPROTO_REQ_DRM_KEE (0x34) for 19 byte reports.
  */
 
 static void wiimod_bboard_in_keys(struct wiimote_data *wdata, const __u8 *keys)
@@ -1388,11 +1397,85 @@ static void wiimod_bboard_in_keys(struct wiimote_data *wdata, const __u8 *keys)
 	input_sync(wdata->extension.input);
 }
 
+static int wiimod_bboard_remap_int(int x,
+				   int src_lo, int src_hi,
+				   int dst_lo, int dst_hi)
+{
+	/* Note: inputs are all signed 16-bit, so we're sure we don't overflow. */
+	int src_delta = src_hi - src_lo;
+	int dst_delta = dst_hi - dst_lo;
+	if (src_delta <= 0 || dst_delta <= 0)
+		return 0;
+	return dst_lo + dst_delta * (x - src_lo) / src_delta;
+}
+
+static int wiimod_bboard_remap(int x,
+			       int src_lo, int src_hi,
+			       int dst_lo, int dst_hi)
+{
+#ifdef WIIMOTE_ENABLE_FPU
+	int result;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 10, 0)
+	if (!kernel_fpu_available())
+		return wiimod_bboard_remap_int(x, src_lo, src_hi, dst_lo, dst_hi);
+#endif
+	kernel_fpu_begin();
+	result = wiimod_bboard_remap_flt(x, src_lo, src_hi, dst_lo, dst_hi);
+	kernel_fpu_end();
+	return result;
+#else
+	return wiimod_bboard_remap_int(x, src_lo, src_hi, dst_lo, dst_hi);
+#endif
+}
+
+static int wiimod_bboard_apply_calib(int w, const struct wiimote_bboard_pressure_cal* cal)
+{
+	if (w < cal->val_17Kg)
+		return wiimod_bboard_remap(w, cal->val_0Kg, cal->val_17Kg, 0, 17000);
+	else
+		return wiimod_bboard_remap(w, cal->val_17Kg, cal->val_34Kg, 17000, 34000);
+}
+
+int wiimod_bboard_correct_fxd(int w, int temp, int ref_temp)
+{
+	/* Fixed-point version. */
+#define FRAC_BITS 24ll
+#define INT_TO_FXD(x) ((x) << FRAC_BITS)
+#define FLT_TO_FXD(x) ((long long) ( (x) * (1ll << FRAC_BITS) ))
+#define FXD_TO_INT(x) ((x) >> FRAC_BITS)
+	/* Based on https://wiibrew.org/wiki/Wii_Balance_Board */
+	/* Gravitational correction, ideally it should depend on global coordinates. */
+	static const long long a = FLT_TO_FXD(0.9990813732147217);
+	/* Temperature correction. */
+	static const long long b = FLT_TO_FXD(0.007000000216066837);
+	long long c = INT_TO_FXD(1) - b * (temp - ref_temp) / 10;
+	/* Note: with FRAC_BITS = 24, this final multiplication uses 24+24+8 = 56 bits. */
+	return FXD_TO_INT(FXD_TO_INT(w * a * c));
+#undef INT_TO_FXD
+#undef FLT_TO_FXD
+#undef FXD_TO_INT
+#undef FRAC_BITS
+}
+
+static int wiimod_bboard_correct(int w, int temp, int ref_temp)
+{
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 10, 0)
+	int result;
+	if (!kernel_fpu_available())
+		return wiimod_bboard_correct_fxd(x, temp, ref_temp);
+	kernel_fpu_begin();
+	result = wiimod_bboard_correct_fxd(x, temp, ref_temp);
+	kernel_fpu_end();
+	return result;
+#else
+	return w;
+#endif
+}
+
 static void wiimod_bboard_in_ext(struct wiimote_data *wdata,
 				 const __u8 *ext)
 {
-	__s32 val[4], tmp, div;
-	unsigned int i;
+	__s32 top_r, bot_r, top_l, bot_l, temp, bat;
 	struct wiimote_state *s = &wdata->state;
 
 	/*
@@ -1400,17 +1483,23 @@ static void wiimod_bboard_in_ext(struct wiimote_data *wdata,
 	 *
 	 *   Byte |  8  7  6  5  4  3  2  1  |
 	 *   -----+--------------------------+
-	 *    1   |    Top Right <15:8>      |
-	 *    2   |    Top Right  <7:0>      |
+	 *    0   | Top Right <15:8>         |
+	 *    1   | Top Right  <7:0>         |
 	 *   -----+--------------------------+
-	 *    3   | Bottom Right <15:8>      |
-	 *    4   | Bottom Right  <7:0>      |
+	 *    2   | Bottom Right <15:8>      |
+	 *    3   | Bottom Right  <7:0>      |
 	 *   -----+--------------------------+
-	 *    5   |     Top Left <15:8>      |
-	 *    6   |     Top Left  <7:0>      |
+	 *    4   | Top Left <15:8>          |
+	 *    5   | Top Left  <7:0>          |
 	 *   -----+--------------------------+
-	 *    7   |  Bottom Left <15:8>      |
-	 *    8   |  Bottom Left  <7:0>      |
+	 *    6   | Bottom Left <15:8>       |
+	 *    7   | Bottom Left  <7:0>       |
+	 *   -----+--------------------------+
+	 *    8   | Temperature              |
+	 *   -----+--------------------------+
+	 *    9   |  0                       |
+	 *   -----+--------------------------+
+	 *    A   | Battery                  |
 	 *   -----+--------------------------+
 	 *
 	 * These values represent the weight-measurements of the Wii-balance
@@ -1419,46 +1508,32 @@ static void wiimod_bboard_in_ext(struct wiimote_data *wdata,
 	 * The balance-board is never reported interleaved with motionp.
 	 */
 
-	val[0] = ext[0];
-	val[0] <<= 8;
-	val[0] |= ext[1];
+	top_r = (ext[0x0] << 8u) | ext[0x1];
+	bot_r = (ext[0x2] << 8u) | ext[0x3];
+	top_l = (ext[0x4] << 8u) | ext[0x5];
+	bot_l = (ext[0x6] << 8u) | ext[0x7];
+	temp = ext[0x8];
+	bat = ext[0xa];
 
-	val[1] = ext[2];
-	val[1] <<= 8;
-	val[1] |= ext[3];
+	/* Convert raw values into grams. */
+	top_r = wiimod_bboard_apply_calib(top_r, &s->calib.bboard.top_r);
+	bot_r = wiimod_bboard_apply_calib(bot_r, &s->calib.bboard.bot_r);
+	top_l = wiimod_bboard_apply_calib(top_l, &s->calib.bboard.top_l);
+	bot_l = wiimod_bboard_apply_calib(bot_l, &s->calib.bboard.bot_l);
 
-	val[2] = ext[4];
-	val[2] <<= 8;
-	val[2] |= ext[5];
+	/* Apply temperature correction. */
+	top_r = wiimod_bboard_correct(top_r, temp, s->calib.bboard.temperature);
+	bot_r = wiimod_bboard_correct(bot_r, temp, s->calib.bboard.temperature);
+	top_l = wiimod_bboard_correct(top_l, temp, s->calib.bboard.temperature);
+	bot_l = wiimod_bboard_correct(bot_l, temp, s->calib.bboard.temperature);
 
-	val[3] = ext[6];
-	val[3] <<= 8;
-	val[3] |= ext[7];
-
-	/* apply calibration data */
-	for (i = 0; i < 4; i++) {
-		if (val[i] <= s->calib_bboard[i][0]) {
-			tmp = 0;
-		} else if (val[i] < s->calib_bboard[i][1]) {
-			tmp = val[i] - s->calib_bboard[i][0];
-			tmp *= 1700;
-			div = s->calib_bboard[i][1] - s->calib_bboard[i][0];
-			tmp /= div ? div : 1;
-		} else {
-			tmp = val[i] - s->calib_bboard[i][1];
-			tmp *= 1700;
-			div = s->calib_bboard[i][2] - s->calib_bboard[i][1];
-			tmp /= div ? div : 1;
-			tmp += 1700;
-		}
-		val[i] = tmp;
-	}
-
-	input_report_abs(wdata->extension.input, ABS_HAT0X, val[0]);
-	input_report_abs(wdata->extension.input, ABS_HAT1X, val[1]);
-	input_report_abs(wdata->extension.input, ABS_HAT2X, val[2]);
-	input_report_abs(wdata->extension.input, ABS_HAT3X, val[3]);
+	input_report_abs(wdata->extension.input, ABS_HAT0X, top_r);
+	input_report_abs(wdata->extension.input, ABS_HAT1X, bot_r);
+	input_report_abs(wdata->extension.input, ABS_HAT2X, top_l);
+	input_report_abs(wdata->extension.input, ABS_HAT3X, bot_l);
 	input_sync(wdata->extension.input);
+	// TODO: report battery
+	(void)bat;
 }
 
 static int wiimod_bboard_open(struct input_dev *dev)
@@ -1467,8 +1542,7 @@ static int wiimod_bboard_open(struct input_dev *dev)
 	unsigned long flags;
 
 	spin_lock_irqsave(&wdata->state.lock, flags);
-	wdata->state.flags |= WIIPROTO_FLAG_EXT_USED;
-	wiiproto_req_drm(wdata, WIIPROTO_REQ_NULL);
+	wiiproto_req_drm(wdata, WIIPROTO_REQ_DRM_KEE);
 	spin_unlock_irqrestore(&wdata->state.lock, flags);
 
 	return 0;
@@ -1480,9 +1554,16 @@ static void wiimod_bboard_close(struct input_dev *dev)
 	unsigned long flags;
 
 	spin_lock_irqsave(&wdata->state.lock, flags);
-	wdata->state.flags &= ~WIIPROTO_FLAG_EXT_USED;
 	wiiproto_req_drm(wdata, WIIPROTO_REQ_NULL);
 	spin_unlock_irqrestore(&wdata->state.lock, flags);
+}
+
+static ssize_t wiimod_bboard_calib_show_pressure_cal(const struct wiimote_bboard_pressure_cal* cal,
+						     const char* label,
+						     char* out)
+{
+	return sprintf(out, "%s: %04x %04x %04x\n",
+		       label, cal->val_0Kg, cal->val_17Kg, cal->val_34Kg);
 }
 
 static ssize_t wiimod_bboard_calib_show(struct device *dev,
@@ -1490,51 +1571,41 @@ static ssize_t wiimod_bboard_calib_show(struct device *dev,
 					char *out)
 {
 	struct wiimote_data *wdata = dev_to_wii(dev);
-	int i, j, ret;
-	__u16 val;
-	__u8 buf[24], offs;
+	const struct wiimote_state *s = &wdata->state;
+	ssize_t total = 0;
+	int ret;
 
-	ret = wiimote_cmd_acquire(wdata);
-	if (ret)
+	ret = wiimod_bboard_calib_show_pressure_cal(&s->calib.bboard.top_r,
+						    "top_right", &out[total]);
+	if (ret <= 0)
 		return ret;
+	total += ret;
 
-	ret = wiimote_cmd_read(wdata, 0xa40024, buf, 12);
-	if (ret != 12) {
-		wiimote_cmd_release(wdata);
-		return ret < 0 ? ret : -EIO;
-	}
-	ret = wiimote_cmd_read(wdata, 0xa40024 + 12, buf + 12, 12);
-	if (ret != 12) {
-		wiimote_cmd_release(wdata);
-		return ret < 0 ? ret : -EIO;
-	}
+	ret = wiimod_bboard_calib_show_pressure_cal(&s->calib.bboard.bot_r,
+						    "bottom_right", &out[total]);
+	if (ret <= 0)
+		return ret;
+	total += ret;
 
-	wiimote_cmd_release(wdata);
+	ret = wiimod_bboard_calib_show_pressure_cal(&s->calib.bboard.top_l,
+						    "top_left", &out[total]);
+	if (ret <= 0)
+		return ret;
+	total += ret;
 
-	spin_lock_irq(&wdata->state.lock);
-	offs = 0;
-	for (i = 0; i < 3; ++i) {
-		for (j = 0; j < 4; ++j) {
-			wdata->state.calib_bboard[j][i] = buf[offs];
-			wdata->state.calib_bboard[j][i] <<= 8;
-			wdata->state.calib_bboard[j][i] |= buf[offs + 1];
-			offs += 2;
-		}
-	}
-	spin_unlock_irq(&wdata->state.lock);
+	ret = wiimod_bboard_calib_show_pressure_cal(&s->calib.bboard.bot_l,
+						    "bottom_left", &out[total]);
+	if (ret <= 0)
+		return ret;
+	total += ret;
 
-	ret = 0;
-	for (i = 0; i < 3; ++i) {
-		for (j = 0; j < 4; ++j) {
-			val = wdata->state.calib_bboard[j][i];
-			if (i == 2 && j == 3)
-				ret += sprintf(&out[ret], "%04x\n", val);
-			else
-				ret += sprintf(&out[ret], "%04x:", val);
-		}
-	}
+	ret = sprintf(&out[total], "bat: %02x\ntemp: %02x\n",
+		      s->calib.bboard.battery, s->calib.bboard.temperature);
+	if (ret <= 0)
+		return ret;
+	total += ret;
 
-	return ret;
+	return total;
 }
 
 static DEVICE_ATTR(bboard_calib, S_IRUGO, wiimod_bboard_calib_show, NULL);
@@ -1543,34 +1614,49 @@ static int wiimod_bboard_probe(const struct wiimod_ops *ops,
 			       struct wiimote_data *wdata,
 			       unsigned int ext)
 {
-	int ret, i, j;
-	__u8 buf[24], offs;
+	int ret;
+	__u8 buf[0x42];
+	const __u32 src_addr = 0xa40020;
+	int total_read = 0;
 	struct input_dev *indev;
 
 	wiimote_cmd_acquire_noint(wdata);
 
-	ret = wiimote_cmd_read(wdata, 0xa40024, buf, 12);
-	if (ret != 12) {
-		wiimote_cmd_release(wdata);
-		return ret < 0 ? ret : -EIO;
-	}
-	ret = wiimote_cmd_read(wdata, 0xa40024 + 12, buf + 12, 12);
-	if (ret != 12) {
-		wiimote_cmd_release(wdata);
-		return ret < 0 ? ret : -EIO;
+	while (total_read < sizeof buf) {
+		int read_next = sizeof buf - total_read;
+		if (read_next > 12)
+			read_next = 12;
+		ret = wiimote_cmd_read(wdata,
+				       src_addr + total_read,
+				       buf + total_read,
+				       read_next);
+		if (ret != read_next) {
+			wiimote_cmd_release(wdata);
+			return ret < 0 ? ret : -EIO;
+		}
+		total_read += ret;
 	}
 
 	wiimote_cmd_release(wdata);
 
-	offs = 0;
-	for (i = 0; i < 3; ++i) {
-		for (j = 0; j < 4; ++j) {
-			wdata->state.calib_bboard[j][i] = buf[offs];
-			wdata->state.calib_bboard[j][i] <<= 8;
-			wdata->state.calib_bboard[j][i] |= buf[offs + 1];
-			offs += 2;
-		}
-	}
+	wdata->state.calib.bboard.battery = buf[0x01];
+
+	wdata->state.calib.bboard.top_r.val_0Kg  = (buf[0x04] << 8) | buf[0x05];
+	wdata->state.calib.bboard.bot_r.val_0Kg  = (buf[0x06] << 8) | buf[0x07];
+	wdata->state.calib.bboard.top_l.val_0Kg  = (buf[0x08] << 8) | buf[0x09];
+	wdata->state.calib.bboard.bot_l.val_0Kg  = (buf[0x0a] << 8) | buf[0x0b];
+
+	wdata->state.calib.bboard.top_r.val_17Kg = (buf[0x0c] << 8) | buf[0x0d];
+	wdata->state.calib.bboard.bot_r.val_17Kg = (buf[0x0e] << 8) | buf[0x0f];
+	wdata->state.calib.bboard.top_l.val_17Kg = (buf[0x10] << 8) | buf[0x11];
+	wdata->state.calib.bboard.bot_l.val_17Kg = (buf[0x12] << 8) | buf[0x13];
+
+	wdata->state.calib.bboard.top_r.val_34Kg = (buf[0x14] << 8) | buf[0x15];
+	wdata->state.calib.bboard.bot_r.val_34Kg = (buf[0x16] << 8) | buf[0x17];
+	wdata->state.calib.bboard.top_l.val_34Kg = (buf[0x18] << 8) | buf[0x19];
+	wdata->state.calib.bboard.bot_l.val_34Kg = (buf[0x1a] << 8) | buf[0x1b];
+
+	wdata->state.calib.bboard.temperature = buf[0x40];
 
 	indev = wdata->extension.input = input_allocate_device();
 	if (!indev)
@@ -1632,7 +1718,7 @@ static void wiimod_bboard_remove(const struct wiimod_ops *ops,
 }
 
 static const struct wiimod_ops wiimod_bboard = {
-	.flags = WIIMOD_FLAG_EXT8,
+	.flags = WIIMOD_FLAG_INPUT,
 	.arg = 0,
 	.probe = wiimod_bboard_probe,
 	.remove = wiimod_bboard_remove,

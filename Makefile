@@ -4,7 +4,7 @@ PACKAGE := hid-wiimote-plus
 # this is used to name the module file, so it must match the original to override it
 MODULE := hid-wiimote
 
-VERSION := 0.9.2
+VERSION := 0.9.2+
 
 DISTDIR := $(PACKAGE)-$(VERSION)
 
@@ -15,6 +15,8 @@ DISTFILES := \
 	gamepad.rst \
 	hid-wiimote-core.c \
 	hid-wiimote-debug.c \
+	hid-wiimote-flt.c \
+	hid-wiimote-flt.h \
 	hid-wiimote-modules.c \
 	hid-wiimote.h \
 	Kbuild \
