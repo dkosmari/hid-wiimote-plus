@@ -6,19 +6,12 @@
 #ifndef __HID_WIIMOTE_FLT_H
 #define __HID_WIIMOTE_FLT_H
 
-int wiimod_battery_get_capacity_flt(int raw);
+int wiimod_remap_flt(int x,
+		     int src_lo, int src_hi,
+		     int dst_lo, int dst_hi);
 
 int wiimod_battery_get_uvolts_flt(int raw);
-
-int wiimod_bboard_remap_flt(int x,
-			    int src_lo, int src_hi,
-			    int dst_lo, int dst_hi);
 
 int wiimod_bboard_correct_weight_flt(int w, int temp, int ref_temp);
 
 #endif
-
-/* Local Variables:    */
-/* indent-tabs-mode: t */
-/* c-basic-offset: 8   */
-/* End:                */

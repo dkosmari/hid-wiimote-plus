@@ -46,6 +46,35 @@
 #include "hid-wiimote-flt.h"
 
 
+static int wiimod_remap_int(int x,
+			    int src_lo, int src_hi,
+			    int dst_lo, int dst_hi)
+{
+	/* Note: inputs are all signed 16-bit, so we're sure we don't overflow. */
+	int src_delta = src_hi - src_lo;
+	int dst_delta = dst_hi - dst_lo;
+	if (src_delta <= 0 || dst_delta <= 0)
+		return 0;
+	return dst_lo + dst_delta * (x - src_lo) / src_delta;
+}
+
+static int wiimod_remap(int x,
+			int src_lo, int src_hi,
+			int dst_lo, int dst_hi)
+{
+#ifdef WIIMOTE_ENABLE_FPU
+	int result;
+	if (!kernel_fpu_available())
+		return wiimod_remap_int(x, src_lo, src_hi, dst_lo, dst_hi);
+	kernel_fpu_begin();
+	result = wiimod_remap_flt(x, src_lo, src_hi, dst_lo, dst_hi);
+	kernel_fpu_end();
+	return result;
+#else /* !WIIMOTE_ENABLE_FPU */
+	return wiimod_remap_int(x, src_lo, src_hi, dst_lo, dst_hi);
+#endif
+}
+
 /*
  * Keys
  * The initial Wii Remote provided a bunch of buttons that are reported as
@@ -205,17 +234,18 @@ static const struct wiimod_ops wiimod_rumble = {
 static enum power_supply_property wiimod_battery_props[] = {
 	POWER_SUPPLY_PROP_PRESENT,
 	POWER_SUPPLY_PROP_ONLINE,
-	/* POWER_SUPPLY_PROP_CAPACITY, */
+	POWER_SUPPLY_PROP_CAPACITY,
+	POWER_SUPPLY_PROP_CAPACITY_ALERT_MIN,
+	POWER_SUPPLY_PROP_CAPACITY_ALERT_MAX,
 	POWER_SUPPLY_PROP_CAPACITY_LEVEL,
 	POWER_SUPPLY_PROP_SCOPE,
 	POWER_SUPPLY_PROP_STATUS,
 	POWER_SUPPLY_PROP_MODEL_NAME,
 	POWER_SUPPLY_PROP_SERIAL_NUMBER,
-	POWER_SUPPLY_PROP_VOLTAGE_MAX,
-	POWER_SUPPLY_PROP_VOLTAGE_MIN,
+	POWER_SUPPLY_PROP_VOLTAGE_MAX_DESIGN,
+	POWER_SUPPLY_PROP_VOLTAGE_MIN_DESIGN,
 	POWER_SUPPLY_PROP_VOLTAGE_NOW,
 };
-
 
 static int wiimod_battery_request_update(struct wiimote_data *wdata,
 					 int *value,
@@ -249,28 +279,19 @@ static int wiimod_battery_request_update(struct wiimote_data *wdata,
 	return 0;
 }
 
-#if 0
-static int wiimod_battery_get_capacity_int(int raw)
-{
-	// Source: https://github.com/dolphin-emu/dolphin/pull/8908
-	return raw * 246 / 255;
-}
-
 static int wiimod_battery_get_capacity(int raw)
 {
-#ifdef WIIMOTE_ENABLE_FPU
-	int result;
-	if (!kernel_fpu_available())
-		return wiimod_battery_get_capacity_int(raw);
-	kernel_fpu_begin();
-	result = wiimod_battery_get_capacity_flt(raw);
-	kernel_fpu_end();
-	return result;
-#else /* !WIIMOTE_ENABLE_FPU */
-	return wiimod_battery_get_capacity_int(raw);
-#endif
+	// Use a piecewise linar approximation.
+	if (raw >= 0x55)
+		return wiimod_remap(raw, 0x55, 0x7c, 75, 100);
+	if (raw >= 0x44)
+		return wiimod_remap(raw, 0x44, 0x55, 50, 75);
+	if (raw >= 0x33)
+		return wiimod_remap(raw, 0x33, 0x44, 25, 50);
+	if (raw >= 0x03)
+		return wiimod_remap(raw, 0x03, 0x33, 0, 25);
+	return 0;
 }
-#endif
 
 static int wiimod_battery_get_uvolts_int(int raw)
 {
@@ -326,7 +347,6 @@ static int wiimod_battery_get_property(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_SCOPE:
 		val->intval = POWER_SUPPLY_SCOPE_DEVICE;
 		return 0;
-#if 0
 	case POWER_SUPPLY_PROP_CAPACITY:
 		ret = wiimod_battery_request_update(wdata, &raw, &crit);
 		if (ret)
@@ -336,7 +356,12 @@ static int wiimod_battery_get_property(struct power_supply *psy,
 		if (val->intval > 100)
 			val->intval = 100;
 		return 0;
-#endif
+	case POWER_SUPPLY_PROP_CAPACITY_ALERT_MIN:
+		val->intval = wiimod_battery_get_capacity(0x02);
+		return 0;
+	case POWER_SUPPLY_PROP_CAPACITY_ALERT_MAX:
+		val->intval = wiimod_battery_get_capacity(0x55);
+		return 0;
 	case POWER_SUPPLY_PROP_CAPACITY_LEVEL:
 		ret = wiimod_battery_request_update(wdata, &raw, &crit);
 		if (ret)
@@ -352,11 +377,11 @@ static int wiimod_battery_get_property(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_SERIAL_NUMBER:
 		val->strval = wdata->hdev->uniq;
 		return 0;
-	case POWER_SUPPLY_PROP_VOLTAGE_MAX:
+	case POWER_SUPPLY_PROP_VOLTAGE_MAX_DESIGN:
 		/* Assume 2 AA alkaline batteries is max. */
 		val->intval = 3200000;
 		return 0;
-	case POWER_SUPPLY_PROP_VOLTAGE_MIN:
+	case POWER_SUPPLY_PROP_VOLTAGE_MIN_DESIGN:
 		/* Corresponds to "critical" warning on Wii U. */
 		val->intval = 2170000;
 		return 0;
@@ -1465,41 +1490,12 @@ static void wiimod_bboard_in_keys(struct wiimote_data *wdata, const __u8 *keys)
 	input_sync(wdata->extension.input);
 }
 
-static int wiimod_bboard_remap_int(int x,
-				   int src_lo, int src_hi,
-				   int dst_lo, int dst_hi)
-{
-	/* Note: inputs are all signed 16-bit, so we're sure we don't overflow. */
-	int src_delta = src_hi - src_lo;
-	int dst_delta = dst_hi - dst_lo;
-	if (src_delta <= 0 || dst_delta <= 0)
-		return 0;
-	return dst_lo + dst_delta * (x - src_lo) / src_delta;
-}
-
-static int wiimod_bboard_remap(int x,
-			       int src_lo, int src_hi,
-			       int dst_lo, int dst_hi)
-{
-#ifdef WIIMOTE_ENABLE_FPU
-	int result;
-	if (!kernel_fpu_available())
-		return wiimod_bboard_remap_int(x, src_lo, src_hi, dst_lo, dst_hi);
-	kernel_fpu_begin();
-	result = wiimod_bboard_remap_flt(x, src_lo, src_hi, dst_lo, dst_hi);
-	kernel_fpu_end();
-	return result;
-#else /* WIIMOTE_ENABLE_FPU */
-	return wiimod_bboard_remap_int(x, src_lo, src_hi, dst_lo, dst_hi);
-#endif
-}
-
 static int wiimod_bboard_apply_calib(int w, const struct wiimote_bboard_pressure_cal* cal)
 {
 	if (w < cal->val_17Kg)
-		return wiimod_bboard_remap(w, cal->val_0Kg, cal->val_17Kg, 0, 17000);
+		return wiimod_remap(w, cal->val_0Kg, cal->val_17Kg, 0, 17000);
 	else
-		return wiimod_bboard_remap(w, cal->val_17Kg, cal->val_34Kg, 17000, 34000);
+		return wiimod_remap(w, cal->val_17Kg, cal->val_34Kg, 17000, 34000);
 }
 
 static int wiimod_bboard_correct_weight_fxd(int w, int temp, int ref_temp)
@@ -3101,9 +3097,3 @@ const struct wiimod_ops *wiimod_ext_table[WIIMOTE_EXT_NUM] = {
 	[WIIMOTE_EXT_GUITAR] = &wiimod_guitar,
 	[WIIMOTE_EXT_TURNTABLE] = &wiimod_turntable,
 };
-
-
-/* Local Variables:    */
-/* indent-tabs-mode: t */
-/* c-basic-offset: 8   */
-/* End:                */

@@ -10,6 +10,17 @@
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 10, 0)
 
+int wiimod_remap_flt(int x,
+		     int src_lo, int src_hi,
+		     int dst_lo, int dst_hi)
+{
+	int src_delta = src_hi - src_lo;
+	int dst_delta = dst_hi - dst_lo;
+	if (src_delta <= 0 || dst_delta <= 0)
+		return 0;
+	return dst_lo + dst_delta * (x - src_lo) / (double)src_delta;
+}
+
 int wiimod_battery_get_capacity_flt(int raw)
 {
 	// Source: https://github.com/dolphin-emu/dolphin/pull/8908
@@ -23,16 +34,6 @@ int wiimod_battery_get_uvolts_flt(int raw)
 	return (m * raw + b);
 }
 
-int wiimod_bboard_remap_flt(int x,
-			    int src_lo, int src_hi,
-			    int dst_lo, int dst_hi)
-{
-	int src_delta = src_hi - src_lo;
-	int dst_delta = dst_hi - dst_lo;
-	if (src_delta <= 0 || dst_delta <= 0)
-		return 0;
-	return dst_lo + dst_delta * (x - src_lo) / (double)src_delta;
-}
 
 int wiimod_bboard_correct_weight_flt(int w, int temp, int ref_temp)
 {
@@ -46,8 +47,3 @@ int wiimod_bboard_correct_weight_flt(int w, int temp, int ref_temp)
 }
 
 #endif
-
-/* Local Variables:    */
-/* indent-tabs-mode: t */
-/* c-basic-offset: 8   */
-/* End:                */

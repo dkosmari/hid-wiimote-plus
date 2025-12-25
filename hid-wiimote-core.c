@@ -1912,9 +1912,3 @@ MODULE_AUTHOR("David Herrmann <dh.herrmann@gmail.com>");
 MODULE_AUTHOR("Daniel K. O.");
 MODULE_DESCRIPTION("Driver for Nintendo Wii / Wii U peripherals");
 MODULE_VERSION(WIIMOTE_MODULE_VERSION "-plus");
-
-
-/* Local Variables:    */
-/* indent-tabs-mode: t */
-/* c-basic-offset: 8   */
-/* End:                */
