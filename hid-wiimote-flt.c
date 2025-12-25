@@ -10,6 +10,19 @@
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 10, 0)
 
+int wiimod_battery_get_capacity_flt(int raw)
+{
+	// Source: https://github.com/dolphin-emu/dolphin/pull/8908
+	return 100.0f * raw * 2.46f / 255.0f - 0.013f;
+}
+
+int wiimod_battery_get_uvolts_flt(int raw)
+{
+	float m = 5221.92f;
+	float b = 2154361.0f;
+	return (m * raw + b);
+}
+
 int wiimod_bboard_remap_flt(int x,
 			    int src_lo, int src_hi,
 			    int dst_lo, int dst_hi)
@@ -18,10 +31,10 @@ int wiimod_bboard_remap_flt(int x,
 	int dst_delta = dst_hi - dst_lo;
 	if (src_delta <= 0 || dst_delta <= 0)
 		return 0;
-	return dst_lo + dst_delta * (x - src_lo) / (float)src_delta;
+	return dst_lo + dst_delta * (x - src_lo) / (double)src_delta;
 }
 
-int wiimod_bboard_correct_flt(int w, int temp, int ref_temp)
+int wiimod_bboard_correct_weight_flt(int w, int temp, int ref_temp)
 {
 	/* Based on https://wiibrew.org/wiki/Wii_Balance_Board */
 	/* Gravitational correction, ideally it should depend on global coordinates. */
@@ -29,7 +42,7 @@ int wiimod_bboard_correct_flt(int w, int temp, int ref_temp)
 	/* Temperature correction. */
 	static const double b = 0.007000000216066837;
 	double c = 1.0 - b * (temp - ref_temp) / 10.0;
-	return (int)w * a * c;
+	return (int)(w * a * c);
 }
 
 #endif

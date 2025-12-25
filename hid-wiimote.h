@@ -149,10 +149,30 @@ struct wiimote_state {
 			struct wiimote_bboard_pressure_cal top_l;
 			struct wiimote_bboard_pressure_cal bot_l;
 		} bboard;
+		struct {
+			__s16 left_x;
+			__s16 left_y;
+			__s16 right_x;
+			__s16 right_y;
+		} pro;
 	} calib;
-	__s16 calib_pro_sticks[4];
 	__u8 pressure_drums[7];
 	__u8 cache_rumble;
+
+	union {
+		struct {
+			__u8 battery;
+			bool crit;
+		} core;
+		struct {
+			__u8 battery;
+		} bboard;
+		struct {
+			__u8 level;
+			bool charging;
+			bool wired;
+		} pro;
+	} power;
 };
 
 struct wiimote_data {
