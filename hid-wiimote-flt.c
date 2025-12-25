@@ -21,11 +21,6 @@ int wiimod_remap_flt(int x,
 	return dst_lo + dst_delta * (x - src_lo) / (double)src_delta;
 }
 
-int wiimod_battery_get_capacity_flt(int raw)
-{
-	// Source: https://github.com/dolphin-emu/dolphin/pull/8908
-	return 100.0f * raw * 2.46f / 255.0f - 0.013f;
-}
 
 int wiimod_battery_get_uvolts_flt(int raw)
 {
