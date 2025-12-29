@@ -46,6 +46,16 @@
 #include "hid-wiimote-flt.h"
 
 
+static __u16 wiimod_load_u16_be(const __u8 *data)
+{
+	return (data[0] << 8) | data[1];
+}
+
+static __u16 wiimod_load_u16_le(const __u8 *data)
+{
+	return data[0] | (data[1] << 8);
+}
+
 static int wiimod_remap_int(int x,
 			    int src_lo, int src_hi,
 			    int dst_lo, int dst_hi)
@@ -231,28 +241,60 @@ static const struct wiimod_ops wiimod_rumble = {
  * This is supported by nearly every device so it's almost always enabled.
  */
 
-static enum power_supply_property wiimod_battery_props[] = {
+/* TODO: needs specialization for balance board and Pro */
+
+static enum power_supply_property wiimod_battery_core_props[] = {
+	POWER_SUPPLY_PROP_STATUS,
 	POWER_SUPPLY_PROP_PRESENT,
 	POWER_SUPPLY_PROP_ONLINE,
+	POWER_SUPPLY_PROP_VOLTAGE_MAX_DESIGN,
+	POWER_SUPPLY_PROP_VOLTAGE_MIN_DESIGN,
+	POWER_SUPPLY_PROP_VOLTAGE_NOW,
 	POWER_SUPPLY_PROP_CAPACITY,
 	POWER_SUPPLY_PROP_CAPACITY_ALERT_MIN,
 	POWER_SUPPLY_PROP_CAPACITY_ALERT_MAX,
 	POWER_SUPPLY_PROP_CAPACITY_LEVEL,
 	POWER_SUPPLY_PROP_SCOPE,
-	POWER_SUPPLY_PROP_STATUS,
 	POWER_SUPPLY_PROP_MODEL_NAME,
 	POWER_SUPPLY_PROP_SERIAL_NUMBER,
+};
+
+static enum power_supply_property wiimod_battery_bboard_props[] = {
+	POWER_SUPPLY_PROP_STATUS,
+	POWER_SUPPLY_PROP_PRESENT,
+	POWER_SUPPLY_PROP_ONLINE,
 	POWER_SUPPLY_PROP_VOLTAGE_MAX_DESIGN,
 	POWER_SUPPLY_PROP_VOLTAGE_MIN_DESIGN,
 	POWER_SUPPLY_PROP_VOLTAGE_NOW,
+	POWER_SUPPLY_PROP_CAPACITY,
+	POWER_SUPPLY_PROP_CAPACITY_ALERT_MIN,
+	POWER_SUPPLY_PROP_CAPACITY_ALERT_MAX,
+	POWER_SUPPLY_PROP_CAPACITY_LEVEL,
+	POWER_SUPPLY_PROP_SCOPE,
+	POWER_SUPPLY_PROP_MODEL_NAME,
+	POWER_SUPPLY_PROP_SERIAL_NUMBER,
 };
 
-static int wiimod_battery_request_update(struct wiimote_data *wdata,
-					 int *value,
-					 bool *crit)
+static enum power_supply_property wiimod_battery_pro_props[] = {
+	POWER_SUPPLY_PROP_STATUS,
+	POWER_SUPPLY_PROP_PRESENT,
+	POWER_SUPPLY_PROP_ONLINE,
+	POWER_SUPPLY_PROP_CAPACITY,
+	POWER_SUPPLY_PROP_CAPACITY_LEVEL,
+	POWER_SUPPLY_PROP_SCOPE,
+	POWER_SUPPLY_PROP_MODEL_NAME,
+	POWER_SUPPLY_PROP_SERIAL_NUMBER,
+};
+
+static int wiimod_battery_core_request_update(struct wiimote_data *wdata,
+					      int *value,
+					      bool *crit)
 {
 	int ret;
 	unsigned long flags;
+
+	/* DEBUG */
+	printk("requesting wiimote battery status\n");
 
 	ret = wiimote_cmd_acquire(wdata);
 	if (ret)
@@ -279,97 +321,229 @@ static int wiimod_battery_request_update(struct wiimote_data *wdata,
 	return 0;
 }
 
-static int wiimod_battery_get_capacity(int raw)
+/* Note: threshold values taken from Wii U's padscore library. */
+enum wiimod_battery_core_bars {
+	WIIMOD_BATTERY_CORE_BARS_0   = 0x00,
+	WIIMOD_BATTERY_CORE_BARS_1   = 0x03,
+	WIIMOD_BATTERY_CORE_BARS_2   = 0x33,
+	WIIMOD_BATTERY_CORE_BARS_3   = 0x44,
+	WIIMOD_BATTERY_CORE_BARS_4   = 0x55,
+	WIIMOD_BATTERY_CORE_BARS_MAX = 0x7c,	/* two alkaline batteries at 1.6 V */
+};
+
+enum wiimod_battery_bboard_bars {
+	WIIMOD_BATTERY_BBOARD_BARS_0   = 0x69,
+	WIIMOD_BATTERY_BBOARD_BARS_1   = 0x6a,
+	WIIMOD_BATTERY_BBOARD_BARS_2   = 0x78,
+	WIIMOD_BATTERY_BBOARD_BARS_3   = 0x7d,
+	WIIMOD_BATTERY_BBOARD_BARS_4   = 0x82,
+	WIIMOD_BATTERY_BBOARD_BARS_MAX = 0xa0,	/* four alkaline batteries at 1.6 V */
+};
+
+static int wiimod_battery_core_get_capacity(int raw)
 {
 	// Use a piecewise linar approximation.
-	if (raw >= 0x55)
-		return wiimod_remap(raw, 0x55, 0x7c, 75, 100);
-	if (raw >= 0x44)
-		return wiimod_remap(raw, 0x44, 0x55, 50, 75);
-	if (raw >= 0x33)
-		return wiimod_remap(raw, 0x33, 0x44, 25, 50);
-	if (raw >= 0x03)
-		return wiimod_remap(raw, 0x03, 0x33, 0, 25);
+	if (raw >= WIIMOD_BATTERY_CORE_BARS_4)
+		return wiimod_remap(raw,
+				    WIIMOD_BATTERY_CORE_BARS_4, WIIMOD_BATTERY_CORE_BARS_MAX,
+				    75, 100);
+	if (raw >= WIIMOD_BATTERY_CORE_BARS_3)
+		return wiimod_remap(raw,
+				    WIIMOD_BATTERY_CORE_BARS_3, WIIMOD_BATTERY_CORE_BARS_4,
+				    50, 75);
+	if (raw >= WIIMOD_BATTERY_CORE_BARS_2)
+		return wiimod_remap(raw,
+				    WIIMOD_BATTERY_CORE_BARS_2, WIIMOD_BATTERY_CORE_BARS_3,
+				    25, 50);
+	if (raw >= WIIMOD_BATTERY_CORE_BARS_1)
+		return wiimod_remap(raw,
+				    WIIMOD_BATTERY_CORE_BARS_1, WIIMOD_BATTERY_CORE_BARS_2,
+				    0, 25);
 	return 0;
 }
 
-static int wiimod_battery_get_uvolts_int(int raw)
+static int wiimod_battery_bboard_get_capacity(int raw)
 {
-	long long m = 5222;
-	long long b = 2154361;
+	// Use a piecewise linar approximation.
+	if (raw >= WIIMOD_BATTERY_BBOARD_BARS_4)
+		return wiimod_remap(raw,
+				    WIIMOD_BATTERY_BBOARD_BARS_4, WIIMOD_BATTERY_BBOARD_BARS_MAX,
+				    75, 100);
+	if (raw >= WIIMOD_BATTERY_BBOARD_BARS_3)
+		return wiimod_remap(raw,
+				    WIIMOD_BATTERY_BBOARD_BARS_3, WIIMOD_BATTERY_BBOARD_BARS_4,
+				    50, 75);
+	if (raw >= WIIMOD_BATTERY_BBOARD_BARS_2)
+		return wiimod_remap(raw,
+				    WIIMOD_BATTERY_BBOARD_BARS_2, WIIMOD_BATTERY_BBOARD_BARS_3,
+				    25, 50);
+	if (raw >= WIIMOD_BATTERY_BBOARD_BARS_1)
+		return wiimod_remap(raw,
+				    WIIMOD_BATTERY_BBOARD_BARS_1, WIIMOD_BATTERY_BBOARD_BARS_2,
+				    0, 25);
+	return 0;
+}
+
+static int wiimod_battery_pro_get_capacity(int level)
+{
+	switch (level) {
+	case 4:
+		return 100;
+	case 3:
+		return 75;
+	case 2:
+		return 50;
+	case 1:
+		return 25;
+	case 0:
+		return 0;
+	default:
+		return -1;
+	}
+}
+
+static int wiimod_battery_core_get_uvolts_int(int raw)
+{
+	static const __s64 m = 5222;
+	static const __s64 b = 2154361;
 	return m * raw + b;
 }
 
-static int wiimod_battery_get_uvolts(int raw)
+static int wiimod_battery_core_get_uvolts(int raw)
 {
 #ifdef WIIMOTE_ENABLE_FPU
 	int result;
 	if (!kernel_fpu_available())
-		return wiimod_battery_get_uvolts_int(raw);
+		return wiimod_battery_core_get_uvolts_int(raw);
 	kernel_fpu_begin();
-	result = wiimod_battery_get_uvolts_flt(raw);
+	result = wiimod_battery_core_get_uvolts_flt(raw);
 	kernel_fpu_end();
 	return result;
 #else /* !WIIMOTE_ENABLE_FPU */
-	return wiimod_battery_get_uvolts_int(raw);
+	return wiimod_battery_core_get_uvolts_int(raw);
 #endif
 }
 
-static int wiimod_battery_get_capacity_level(int raw, bool crit)
+static int wiimod_battery_bboard_get_uvolts_int(int raw)
 {
-	// Note: values taken from Wii U's padscore library.
+	static const __s64 m = 40643;
+	static const __s64 b = -76463;
+	return m * raw + b;
+}
+
+static int wiimod_battery_bboard_get_uvolts(int raw)
+{
+#ifdef WIIMOTE_ENABLE_FPU
+	int result;
+	if (!kernel_fpu_available())
+		return wiimod_battery_bboard_get_uvolts_int(raw);
+	kernel_fpu_begin();
+	result = wiimod_battery_bboard_get_uvolts_flt(raw);
+	kernel_fpu_end();
+	return result;
+#else /* !WIIMOTE_ENABLE_FPU */
+	return wiimod_battery_bboard_get_uvolts_int(raw);
+#endif
+}
+
+static int wiimod_battery_core_get_capacity_level(int raw, bool crit)
+{
 	if (crit)
 		return POWER_SUPPLY_CAPACITY_LEVEL_CRITICAL;
-	if (raw >= 0x55)
+	if (raw >= WIIMOD_BATTERY_CORE_BARS_4)
 		return POWER_SUPPLY_CAPACITY_LEVEL_FULL;
-	if (raw >= 0x44)
+	if (raw >= WIIMOD_BATTERY_CORE_BARS_3)
 		return POWER_SUPPLY_CAPACITY_LEVEL_HIGH;
-	if (raw >= 0x33)
+	if (raw >= WIIMOD_BATTERY_CORE_BARS_2)
 		return POWER_SUPPLY_CAPACITY_LEVEL_NORMAL;
-	if (raw >= 0x03)
+	if (raw >= WIIMOD_BATTERY_CORE_BARS_1)
 		return POWER_SUPPLY_CAPACITY_LEVEL_LOW;
 	return POWER_SUPPLY_CAPACITY_LEVEL_CRITICAL;
 }
 
-static int wiimod_battery_get_property(struct power_supply *psy,
-				       enum power_supply_property prop,
-				       union power_supply_propval *val)
+static int wiimod_battery_bboard_get_capacity_level(int raw)
+{
+	if (raw >= WIIMOD_BATTERY_BBOARD_BARS_4)
+		return POWER_SUPPLY_CAPACITY_LEVEL_FULL;
+	if (raw >= WIIMOD_BATTERY_BBOARD_BARS_3)
+		return POWER_SUPPLY_CAPACITY_LEVEL_HIGH;
+	if (raw >= WIIMOD_BATTERY_BBOARD_BARS_2)
+		return POWER_SUPPLY_CAPACITY_LEVEL_NORMAL;
+	if (raw >= WIIMOD_BATTERY_BBOARD_BARS_1)
+		return POWER_SUPPLY_CAPACITY_LEVEL_LOW;
+	return POWER_SUPPLY_CAPACITY_LEVEL_CRITICAL;
+}
+
+static int wiimod_battery_pro_get_capacity_level(int level)
+{
+	switch (level) {
+	case 4:
+		return POWER_SUPPLY_CAPACITY_LEVEL_FULL;
+	case 3:
+		return POWER_SUPPLY_CAPACITY_LEVEL_HIGH;
+	case 2:
+		return POWER_SUPPLY_CAPACITY_LEVEL_NORMAL;
+	case 1:
+		return POWER_SUPPLY_CAPACITY_LEVEL_LOW;
+	case 0:
+		return POWER_SUPPLY_CAPACITY_LEVEL_CRITICAL;
+	default:
+		return -1;
+	}
+}
+
+static int wiimod_battery_core_get_property(struct power_supply *psy,
+					    enum power_supply_property prop,
+					    union power_supply_propval *val)
 {
 	struct wiimote_data *wdata = power_supply_get_drvdata(psy);
 	int ret = 0, raw = 0;
 	bool crit = false;
 
 	switch (prop) {
+	case POWER_SUPPLY_PROP_STATUS:
+		val->intval = POWER_SUPPLY_STATUS_DISCHARGING;
+		return 0;
 	case POWER_SUPPLY_PROP_PRESENT:
 	case POWER_SUPPLY_PROP_ONLINE:
 		val->intval = 1;
 		return 0;
-	case POWER_SUPPLY_PROP_SCOPE:
-		val->intval = POWER_SUPPLY_SCOPE_DEVICE;
+	case POWER_SUPPLY_PROP_VOLTAGE_MAX_DESIGN:
+		/* Assume 2 AA alkaline batteries is max. */
+		val->intval = 3200000;
 		return 0;
-	case POWER_SUPPLY_PROP_CAPACITY:
-		ret = wiimod_battery_request_update(wdata, &raw, &crit);
+	case POWER_SUPPLY_PROP_VOLTAGE_MIN_DESIGN:
+		val->intval = wiimod_battery_core_get_uvolts(WIIMOD_BATTERY_CORE_BARS_0);
+		return 0;
+	case POWER_SUPPLY_PROP_VOLTAGE_NOW:
+		ret = wiimod_battery_core_request_update(wdata, &raw, &crit);
 		if (ret)
 			return ret;
-		val->intval = wiimod_battery_get_capacity(raw);
+		val->intval = wiimod_battery_core_get_uvolts(raw);
+		return 0;
+	case POWER_SUPPLY_PROP_CAPACITY:
+		ret = wiimod_battery_core_request_update(wdata, &raw, &crit);
+		if (ret)
+			return ret;
+		val->intval = wiimod_battery_core_get_capacity(raw);
 		/* Note: lots of userspace tools don't like capacity above 100% */
 		if (val->intval > 100)
 			val->intval = 100;
 		return 0;
 	case POWER_SUPPLY_PROP_CAPACITY_ALERT_MIN:
-		val->intval = wiimod_battery_get_capacity(0x02);
+		val->intval = wiimod_battery_core_get_capacity(WIIMOD_BATTERY_CORE_BARS_1);
 		return 0;
 	case POWER_SUPPLY_PROP_CAPACITY_ALERT_MAX:
-		val->intval = wiimod_battery_get_capacity(0x55);
+		val->intval = wiimod_battery_core_get_capacity(WIIMOD_BATTERY_CORE_BARS_4);
 		return 0;
 	case POWER_SUPPLY_PROP_CAPACITY_LEVEL:
-		ret = wiimod_battery_request_update(wdata, &raw, &crit);
+		ret = wiimod_battery_core_request_update(wdata, &raw, &crit);
 		if (ret)
 			return ret;
-		val->intval = wiimod_battery_get_capacity_level(raw, crit);
+		val->intval = wiimod_battery_core_get_capacity_level(raw, crit);
 		return 0;
-	case POWER_SUPPLY_PROP_STATUS:
-		val->intval = POWER_SUPPLY_STATUS_DISCHARGING;
+	case POWER_SUPPLY_PROP_SCOPE:
+		val->intval = POWER_SUPPLY_SCOPE_DEVICE;
 		return 0;
 	case POWER_SUPPLY_PROP_MODEL_NAME:
 		val->strval = wdata->hdev->name;
@@ -377,22 +551,126 @@ static int wiimod_battery_get_property(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_SERIAL_NUMBER:
 		val->strval = wdata->hdev->uniq;
 		return 0;
+	default:
+		return -EINVAL;
+	}
+}
+
+static int wiimod_battery_bboard_get_property(struct power_supply *psy,
+					      enum power_supply_property prop,
+					      union power_supply_propval *val)
+{
+	struct wiimote_data *wdata = power_supply_get_drvdata(psy);
+	int raw = wdata->state.extension.bboard.battery;
+	int cal_min = wdata->state.extension.bboard.calib.battery;
+
+	switch (prop) {
+	case POWER_SUPPLY_PROP_STATUS:
+		val->intval = POWER_SUPPLY_STATUS_DISCHARGING;
+		return 0;
+	case POWER_SUPPLY_PROP_PRESENT:
+	case POWER_SUPPLY_PROP_ONLINE:
+		val->intval = 1;
+		return 0;
 	case POWER_SUPPLY_PROP_VOLTAGE_MAX_DESIGN:
 		/* Assume 2 AA alkaline batteries is max. */
-		val->intval = 3200000;
+		val->intval = 6400000;
 		return 0;
 	case POWER_SUPPLY_PROP_VOLTAGE_MIN_DESIGN:
-		/* Corresponds to "critical" warning on Wii U. */
-		val->intval = 2170000;
+		val->intval = wiimod_battery_bboard_get_uvolts(cal_min);
 		return 0;
 	case POWER_SUPPLY_PROP_VOLTAGE_NOW:
-		ret = wiimod_battery_request_update(wdata, &raw, &crit);
-		if (ret)
-			return ret;
-		val->intval = wiimod_battery_get_uvolts(raw);
+		val->intval = wiimod_battery_bboard_get_uvolts(raw);
+		return 0;
+	case POWER_SUPPLY_PROP_CAPACITY:
+		val->intval = wiimod_battery_bboard_get_capacity(raw);
+		/* Note: lots of userspace tools don't like capacity above 100% */
+		if (val->intval > 100)
+			val->intval = 100;
+		return 0;
+	case POWER_SUPPLY_PROP_CAPACITY_ALERT_MIN:
+		val->intval = wiimod_battery_bboard_get_capacity(cal_min);
+		return 0;
+	case POWER_SUPPLY_PROP_CAPACITY_ALERT_MAX:
+		val->intval = wiimod_battery_bboard_get_capacity(WIIMOD_BATTERY_BBOARD_BARS_4);
+		return 0;
+	case POWER_SUPPLY_PROP_CAPACITY_LEVEL:
+		val->intval = wiimod_battery_bboard_get_capacity_level(raw);
+		return 0;
+	case POWER_SUPPLY_PROP_SCOPE:
+		val->intval = POWER_SUPPLY_SCOPE_DEVICE;
+		return 0;
+	case POWER_SUPPLY_PROP_MODEL_NAME:
+		val->strval = wdata->hdev->name;
+		return 0;
+	case POWER_SUPPLY_PROP_SERIAL_NUMBER:
+		val->strval = wdata->hdev->uniq;
 		return 0;
 	default:
 		return -EINVAL;
+	}
+}
+
+
+static int wiimod_battery_pro_get_property(struct power_supply *psy,
+					   enum power_supply_property prop,
+					   union power_supply_propval *val)
+{
+	struct wiimote_data *wdata = power_supply_get_drvdata(psy);
+	int ret = 0;
+	int level = wdata->state.extension.pro.battery;
+
+	switch (prop) {
+	case POWER_SUPPLY_PROP_STATUS:
+		if (wdata->state.extension.pro.charging)
+			val->intval = POWER_SUPPLY_STATUS_CHARGING;
+		else if (wdata->state.extension.pro.wired)
+			val->intval = POWER_SUPPLY_STATUS_NOT_CHARGING;
+		else
+			val->intval = POWER_SUPPLY_STATUS_DISCHARGING;
+		return 0;
+	case POWER_SUPPLY_PROP_PRESENT:
+	case POWER_SUPPLY_PROP_ONLINE:
+		val->intval = 1;
+		return 0;
+	case POWER_SUPPLY_PROP_CAPACITY:
+		ret = wiimod_battery_pro_get_capacity(level);
+		if (ret < 0)
+			return -EIO;
+		val->intval = ret;
+		return 0;
+	case POWER_SUPPLY_PROP_CAPACITY_LEVEL:
+		ret = wiimod_battery_pro_get_capacity_level(level);
+		if (ret < 0)
+			return -EIO;
+		val->intval = ret;
+		return 0;
+	case POWER_SUPPLY_PROP_SCOPE:
+		val->intval = POWER_SUPPLY_SCOPE_DEVICE;
+		return 0;
+	case POWER_SUPPLY_PROP_MODEL_NAME:
+		val->strval = wdata->hdev->name;
+		return 0;
+	case POWER_SUPPLY_PROP_SERIAL_NUMBER:
+		val->strval = wdata->hdev->uniq;
+		return 0;
+	default:
+		return -EINVAL;
+	}
+}
+
+static int wiimod_battery_get_property(struct power_supply *psy,
+				       enum power_supply_property prop,
+				       union power_supply_propval *val)
+{
+	struct wiimote_data *wdata = power_supply_get_drvdata(psy);
+	switch (wdata->state.devtype) {
+	case WIIMOTE_DEV_BALANCE_BOARD:
+		return wiimod_battery_bboard_get_property(psy, prop, val);
+	case WIIMOTE_DEV_PRO_CONTROLLER:
+		return wiimod_battery_pro_get_property(psy, prop, val);
+	default:
+		return wiimod_battery_core_get_property(psy, prop, val);
 	}
 }
 
@@ -403,17 +681,47 @@ static int wiimod_battery_probe(const struct wiimod_ops *ops,
 	struct power_supply_config psy_cfg = { .drv_data = wdata, };
 	int ret;
 
-	wdata->battery_desc.properties = wiimod_battery_props;
-	wdata->battery_desc.num_properties = ARRAY_SIZE(wiimod_battery_props);
+	(void)ops;
+	(void)ext;
+
+	/* DEBUG */
+	printk("probing battery for ext=%u, devtype=%u\n",
+	       ext, wdata->state.devtype);
+
+	switch (wdata->state.devtype) {
+	case WIIMOTE_DEV_BALANCE_BOARD:
+		/* DEBUG */
+		printk("creating battery for Balance Board\n");
+		wdata->battery_desc.properties = wiimod_battery_bboard_props;
+		wdata->battery_desc.num_properties = ARRAY_SIZE(wiimod_battery_bboard_props);
+		wdata->battery_desc.name = devm_kasprintf(&wdata->hdev->dev,
+							  GFP_KERNEL, "balance_board_battery_%s",
+							  wdata->hdev->uniq);
+		break;
+	case WIIMOTE_DEV_PRO_CONTROLLER:
+		/* DEBUG */
+		printk("creating battery for Wii U Pro Controller\n");
+		wdata->battery_desc.properties = wiimod_battery_pro_props;
+		wdata->battery_desc.num_properties = ARRAY_SIZE(wiimod_battery_pro_props);
+		wdata->battery_desc.name = devm_kasprintf(&wdata->hdev->dev,
+							  GFP_KERNEL, "wii_u_pro_battery_%s",
+							  wdata->hdev->uniq);
+		break;
+	default:
+		/* DEBUG */
+		printk("creating battery for wiimote core\n");
+		wdata->battery_desc.properties = wiimod_battery_core_props;
+		wdata->battery_desc.num_properties = ARRAY_SIZE(wiimod_battery_core_props);
+		wdata->battery_desc.name = devm_kasprintf(&wdata->hdev->dev,
+							  GFP_KERNEL, "wiimote_battery_%s",
+							  wdata->hdev->uniq);
+	}
+	if (!wdata->battery_desc.name)
+		return -ENOMEM;
 	wdata->battery_desc.get_property = wiimod_battery_get_property;
 	wdata->battery_desc.type = POWER_SUPPLY_TYPE_BATTERY;
 	wdata->battery_desc.use_for_apm = 0;
 	wdata->battery_desc.no_thermal = true;
-	wdata->battery_desc.name = devm_kasprintf(&wdata->hdev->dev,
-						  GFP_KERNEL, "wiimote_battery_%s",
-						  wdata->hdev->uniq);
-	if (!wdata->battery_desc.name)
-		return -ENOMEM;
 
 	wdata->battery = power_supply_register(&wdata->hdev->dev,
 					       &wdata->battery_desc,
@@ -436,8 +744,13 @@ err_free:
 static void wiimod_battery_remove(const struct wiimod_ops *ops,
 				  struct wiimote_data *wdata)
 {
+	(void)ops;
+
 	if (!wdata->battery_desc.name)
 		return;
+
+	/* DEBUG */
+	printk("removing battery: %s\n", wdata->battery_desc.name);
 
 	power_supply_unregister(wdata->battery);
 	devm_kfree(&wdata->hdev->dev, wdata->battery_desc.name);
@@ -1004,7 +1317,7 @@ static const __u16 wiimod_nunchuk_map[] = {
 
 static void wiimod_nunchuk_in_ext(struct wiimote_data *wdata, const __u8 *ext)
 {
-	struct input_dev *indev = wdata->extension.input;
+	struct input_dev *indev = wdata->ext_input;
 	__s16 x, y, z, bx, by;
 
 	/*   Byte |   8    7 |  6    5 |  4    3 |  2 |  1  |
@@ -1122,7 +1435,7 @@ static int wiimod_nunchuk_probe(const struct wiimod_ops *ops,
 	int ret, i;
 	struct input_dev *indev;
 
-	indev = wdata->extension.input = input_allocate_device();
+	indev = wdata->ext_input = input_allocate_device();
 	if (!indev)
 		return -ENOMEM;
 
@@ -1159,7 +1472,7 @@ static int wiimod_nunchuk_probe(const struct wiimod_ops *ops,
 	ret = input_register_device(indev);
 	if (ret) {
 		input_free_device(indev);
-		wdata->extension.input = NULL;
+		wdata->ext_input = NULL;
 	}
 
 	return ret;
@@ -1168,11 +1481,11 @@ static int wiimod_nunchuk_probe(const struct wiimod_ops *ops,
 static void wiimod_nunchuk_remove(const struct wiimod_ops *ops,
 				  struct wiimote_data *wdata)
 {
-	if (!wdata->extension.input)
+	if (!wdata->ext_input)
 		return;
 
-	input_unregister_device(wdata->extension.input);
-	wdata->extension.input = NULL;
+	input_unregister_device(wdata->ext_input);
+	wdata->ext_input = NULL;
 }
 
 static const struct wiimod_ops wiimod_nunchuk = {
@@ -1233,7 +1546,7 @@ static const __u16 wiimod_classic_map[] = {
 
 static void wiimod_classic_in_ext(struct wiimote_data *wdata, const __u8 *ext)
 {
-	struct input_dev *indev = wdata->extension.input;
+	struct input_dev *indev = wdata->ext_input;
 	__s8 rx, ry, lx, ly, lt, rt;
 
 	/*   Byte |  8  |  7  |  6  |  5  |  4  |  3  |  2  |  1  |
@@ -1407,7 +1720,7 @@ static int wiimod_classic_probe(const struct wiimod_ops *ops,
 	int ret, i;
 	struct input_dev *indev;
 
-	indev = wdata->extension.input = input_allocate_device();
+	indev = wdata->ext_input = input_allocate_device();
 	if (!indev)
 		return -ENOMEM;
 
@@ -1446,7 +1759,7 @@ static int wiimod_classic_probe(const struct wiimod_ops *ops,
 	ret = input_register_device(indev);
 	if (ret) {
 		input_free_device(indev);
-		wdata->extension.input = NULL;
+		wdata->ext_input = NULL;
 	}
 
 	return ret;
@@ -1455,11 +1768,11 @@ static int wiimod_classic_probe(const struct wiimod_ops *ops,
 static void wiimod_classic_remove(const struct wiimod_ops *ops,
 				  struct wiimote_data *wdata)
 {
-	if (!wdata->extension.input)
+	if (!wdata->ext_input)
 		return;
 
-	input_unregister_device(wdata->extension.input);
-	wdata->extension.input = NULL;
+	input_unregister_device(wdata->ext_input);
+	wdata->ext_input = NULL;
 }
 
 static const struct wiimod_ops wiimod_classic = {
@@ -1485,9 +1798,9 @@ static const struct wiimod_ops wiimod_classic = {
 
 static void wiimod_bboard_in_keys(struct wiimote_data *wdata, const __u8 *keys)
 {
-	input_report_key(wdata->extension.input, BTN_A,
+	input_report_key(wdata->ext_input, BTN_A,
 			 !!(keys[1] & 0x08));
-	input_sync(wdata->extension.input);
+	input_sync(wdata->ext_input);
 }
 
 static int wiimod_bboard_apply_calib(int w, const struct wiimote_bboard_pressure_cal* cal)
@@ -1537,31 +1850,31 @@ static int wiimod_bboard_correct_weight(int w, int temp, int ref_temp)
 static void wiimod_bboard_in_ext(struct wiimote_data *wdata,
 				 const __u8 *ext)
 {
-	__s32 top_r, bot_r, top_l, bot_l, temp, bat;
+	__s32 front_right, back_right, front_left, back_left, temp, bat;
 	struct wiimote_state *s = &wdata->state;
 
 	/*
 	 * Balance board data layout:
 	 *
-	 *   Byte |  8  7  6  5  4  3  2  1  |
+	 *   Byte |  7  6  5  4  3  2  1  0  |
 	 *   -----+--------------------------+
-	 *    0   | Top Right <15:8>         |
-	 *    1   | Top Right  <7:0>         |
+	 *   0x0  | Front Right <15:8>       |
+	 *   0x1  | Front Right  <7:0>       |
 	 *   -----+--------------------------+
-	 *    2   | Bottom Right <15:8>      |
-	 *    3   | Bottom Right  <7:0>      |
+	 *   0x2  | Back Right <15:8>        |
+	 *   0x3  | Back Right  <7:0>        |
 	 *   -----+--------------------------+
-	 *    4   | Top Left <15:8>          |
-	 *    5   | Top Left  <7:0>          |
+	 *   0x4  | Front Left <15:8>        |
+	 *   0x5  | Front Left  <7:0>        |
 	 *   -----+--------------------------+
-	 *    6   | Bottom Left <15:8>       |
-	 *    7   | Bottom Left  <7:0>       |
+	 *   0x6  | Back Left <15:8>         |
+	 *   0x7  | Back Left  <7:0>         |
 	 *   -----+--------------------------+
-	 *    8   | Temperature              |
+	 *   0x8  | Temperature              |
 	 *   -----+--------------------------+
-	 *    9   |  0                       |
+	 *   0x9  |  0                       |
 	 *   -----+--------------------------+
-	 *    A   | Battery                  |
+	 *   0xA  | Battery                  |
 	 *   -----+--------------------------+
 	 *
 	 * These values represent the weight-measurements of the Wii-balance
@@ -1570,32 +1883,40 @@ static void wiimod_bboard_in_ext(struct wiimote_data *wdata,
 	 * The balance-board is never reported interleaved with motionp.
 	 */
 
-	top_r = (ext[0x0] << 8u) | ext[0x1];
-	bot_r = (ext[0x2] << 8u) | ext[0x3];
-	top_l = (ext[0x4] << 8u) | ext[0x5];
-	bot_l = (ext[0x6] << 8u) | ext[0x7];
+	front_right = wiimod_load_u16_be(ext + 0x0);
+	back_right  = wiimod_load_u16_be(ext + 0x2);
+	front_left  = wiimod_load_u16_be(ext + 0x4);
+	back_left   = wiimod_load_u16_be(ext + 0x6);
 	temp = ext[0x8];
 	bat = ext[0xa];
 
 	/* Convert raw values into grams. */
-	top_r = wiimod_bboard_apply_calib(top_r, &s->calib.bboard.top_r);
-	bot_r = wiimod_bboard_apply_calib(bot_r, &s->calib.bboard.bot_r);
-	top_l = wiimod_bboard_apply_calib(top_l, &s->calib.bboard.top_l);
-	bot_l = wiimod_bboard_apply_calib(bot_l, &s->calib.bboard.bot_l);
+	front_right = wiimod_bboard_apply_calib(front_right,
+						&s->extension.bboard.calib.front_right);
+	back_right  = wiimod_bboard_apply_calib(back_right,
+						&s->extension.bboard.calib.back_right);
+	front_left  = wiimod_bboard_apply_calib(front_left,
+						&s->extension.bboard.calib.front_left);
+	back_left   = wiimod_bboard_apply_calib(back_left,
+						&s->extension.bboard.calib.back_left);
 
 	/* Apply temperature correction. */
-	top_r = wiimod_bboard_correct_weight(top_r, temp, s->calib.bboard.temperature);
-	bot_r = wiimod_bboard_correct_weight(bot_r, temp, s->calib.bboard.temperature);
-	top_l = wiimod_bboard_correct_weight(top_l, temp, s->calib.bboard.temperature);
-	bot_l = wiimod_bboard_correct_weight(bot_l, temp, s->calib.bboard.temperature);
+	front_right = wiimod_bboard_correct_weight(front_right, temp,
+						   s->extension.bboard.calib.temperature);
+	back_right  = wiimod_bboard_correct_weight(back_right, temp,
+						   s->extension.bboard.calib.temperature);
+	front_left  = wiimod_bboard_correct_weight(front_left, temp,
+						   s->extension.bboard.calib.temperature);
+	back_left   = wiimod_bboard_correct_weight(back_left, temp,
+						   s->extension.bboard.calib.temperature);
 
-	input_report_abs(wdata->extension.input, ABS_HAT0X, top_r);
-	input_report_abs(wdata->extension.input, ABS_HAT1X, bot_r);
-	input_report_abs(wdata->extension.input, ABS_HAT2X, top_l);
-	input_report_abs(wdata->extension.input, ABS_HAT3X, bot_l);
-	input_sync(wdata->extension.input);
-	// TODO: report battery
-	(void)bat;
+	input_report_abs(wdata->ext_input, ABS_HAT0X, front_right);
+	input_report_abs(wdata->ext_input, ABS_HAT1X, back_right);
+	input_report_abs(wdata->ext_input, ABS_HAT2X, front_left);
+	input_report_abs(wdata->ext_input, ABS_HAT3X, back_left);
+	input_sync(wdata->ext_input);
+
+	s->extension.bboard.battery = bat;
 }
 
 static int wiimod_bboard_open(struct input_dev *dev)
@@ -1637,32 +1958,33 @@ static ssize_t wiimod_bboard_calib_show(struct device *dev,
 	ssize_t total = 0;
 	int ret;
 
-	ret = wiimod_bboard_calib_show_pressure_cal(&s->calib.bboard.top_r,
-						    "top_right", &out[total]);
+	ret = wiimod_bboard_calib_show_pressure_cal(&s->extension.bboard.calib.front_right,
+						    "front_right", &out[total]);
 	if (ret <= 0)
 		return ret;
 	total += ret;
 
-	ret = wiimod_bboard_calib_show_pressure_cal(&s->calib.bboard.bot_r,
-						    "bottom_right", &out[total]);
+	ret = wiimod_bboard_calib_show_pressure_cal(&s->extension.bboard.calib.back_right,
+						    "back_right", &out[total]);
 	if (ret <= 0)
 		return ret;
 	total += ret;
 
-	ret = wiimod_bboard_calib_show_pressure_cal(&s->calib.bboard.top_l,
-						    "top_left", &out[total]);
+	ret = wiimod_bboard_calib_show_pressure_cal(&s->extension.bboard.calib.front_left,
+						    "front_left", &out[total]);
 	if (ret <= 0)
 		return ret;
 	total += ret;
 
-	ret = wiimod_bboard_calib_show_pressure_cal(&s->calib.bboard.bot_l,
-						    "bottom_left", &out[total]);
+	ret = wiimod_bboard_calib_show_pressure_cal(&s->extension.bboard.calib.back_left,
+						    "back_left", &out[total]);
 	if (ret <= 0)
 		return ret;
 	total += ret;
 
-	ret = sprintf(&out[total], "bat: %02x\ntemp: %02x\n",
-		      s->calib.bboard.battery, s->calib.bboard.temperature);
+	ret = sprintf(&out[total], "battery: %02x\ntemperature: %02x\n",
+		      s->extension.bboard.calib.battery,
+		      s->extension.bboard.calib.temperature);
 	if (ret <= 0)
 		return ret;
 	total += ret;
@@ -1676,11 +1998,13 @@ static int wiimod_bboard_probe(const struct wiimod_ops *ops,
 			       struct wiimote_data *wdata,
 			       unsigned int ext)
 {
+	/* TODO: add calibration data table here */
 	int ret;
 	__u8 buf[0x42];
 	const __u32 src_addr = 0xa40020;
 	int total_read = 0;
 	struct input_dev *indev;
+	struct wiimote_state *s = &wdata->state;
 
 	wiimote_cmd_acquire_noint(wdata);
 
@@ -1701,26 +2025,26 @@ static int wiimod_bboard_probe(const struct wiimod_ops *ops,
 
 	wiimote_cmd_release(wdata);
 
-	wdata->state.calib.bboard.battery = buf[0x01];
+	s->extension.bboard.calib.battery = buf[0x01];
 
-	wdata->state.calib.bboard.top_r.val_0Kg  = (buf[0x04] << 8) | buf[0x05];
-	wdata->state.calib.bboard.bot_r.val_0Kg  = (buf[0x06] << 8) | buf[0x07];
-	wdata->state.calib.bboard.top_l.val_0Kg  = (buf[0x08] << 8) | buf[0x09];
-	wdata->state.calib.bboard.bot_l.val_0Kg  = (buf[0x0a] << 8) | buf[0x0b];
+	s->extension.bboard.calib.front_right.val_0Kg = wiimod_load_u16_be(buf + 0x04);
+	s->extension.bboard.calib.back_right.val_0Kg  = wiimod_load_u16_be(buf + 0x06);
+	s->extension.bboard.calib.front_left.val_0Kg  = wiimod_load_u16_be(buf + 0x08);
+	s->extension.bboard.calib.back_left.val_0Kg   = wiimod_load_u16_be(buf + 0x0a);
 
-	wdata->state.calib.bboard.top_r.val_17Kg = (buf[0x0c] << 8) | buf[0x0d];
-	wdata->state.calib.bboard.bot_r.val_17Kg = (buf[0x0e] << 8) | buf[0x0f];
-	wdata->state.calib.bboard.top_l.val_17Kg = (buf[0x10] << 8) | buf[0x11];
-	wdata->state.calib.bboard.bot_l.val_17Kg = (buf[0x12] << 8) | buf[0x13];
+	s->extension.bboard.calib.front_right.val_17Kg = wiimod_load_u16_be(buf + 0x0c);
+	s->extension.bboard.calib.back_right.val_17Kg  = wiimod_load_u16_be(buf + 0x0e);
+	s->extension.bboard.calib.front_left.val_17Kg  = wiimod_load_u16_be(buf + 0x10);
+	s->extension.bboard.calib.back_left.val_17Kg   = wiimod_load_u16_be(buf + 0x12);
 
-	wdata->state.calib.bboard.top_r.val_34Kg = (buf[0x14] << 8) | buf[0x15];
-	wdata->state.calib.bboard.bot_r.val_34Kg = (buf[0x16] << 8) | buf[0x17];
-	wdata->state.calib.bboard.top_l.val_34Kg = (buf[0x18] << 8) | buf[0x19];
-	wdata->state.calib.bboard.bot_l.val_34Kg = (buf[0x1a] << 8) | buf[0x1b];
+	s->extension.bboard.calib.front_right.val_34Kg = wiimod_load_u16_be(buf + 0x14);
+	s->extension.bboard.calib.back_right.val_34Kg  = wiimod_load_u16_be(buf + 0x16);
+	s->extension.bboard.calib.front_left.val_34Kg  = wiimod_load_u16_be(buf + 0x18);
+	s->extension.bboard.calib.back_left.val_34Kg   = wiimod_load_u16_be(buf + 0x1a);
 
-	wdata->state.calib.bboard.temperature = buf[0x40];
+	s->extension.bboard.calib.temperature = buf[0x40];
 
-	indev = wdata->extension.input = input_allocate_device();
+	indev = wdata->ext_input = input_allocate_device();
 	if (!indev)
 		return -ENOMEM;
 
@@ -1756,6 +2080,10 @@ static int wiimod_bboard_probe(const struct wiimod_ops *ops,
 	if (ret)
 		goto err_file;
 
+	/* re-create the battery */
+	wiimod_battery_remove(&wiimod_battery, wdata);
+	wiimod_battery_probe(&wiimod_battery, wdata, ext);
+
 	return 0;
 
 err_file:
@@ -1763,18 +2091,18 @@ err_file:
 			   &dev_attr_bboard_calib);
 err_free:
 	input_free_device(indev);
-	wdata->extension.input = NULL;
+	wdata->ext_input = NULL;
 	return ret;
 }
 
 static void wiimod_bboard_remove(const struct wiimod_ops *ops,
 				 struct wiimote_data *wdata)
 {
-	if (!wdata->extension.input)
+	if (!wdata->ext_input)
 		return;
 
-	input_unregister_device(wdata->extension.input);
-	wdata->extension.input = NULL;
+	input_unregister_device(wdata->ext_input);
+	wdata->ext_input = NULL;
 	device_remove_file(&wdata->hdev->dev,
 			   &dev_attr_bboard_calib);
 }
@@ -1847,33 +2175,34 @@ static const __u16 wiimod_pro_map[] = {
 
 static void wiimod_pro_in_ext(struct wiimote_data *wdata, const __u8 *ext)
 {
-	struct input_dev *indev = wdata->extension.input;
+	struct input_dev *indev = wdata->ext_input;
+	struct wiimote_state *s = &wdata->state;
 	__s16 rx, ry, lx, ly;
 
-	/*   Byte |  8  |  7  |  6  |  5  |  4  |  3  |  2  |  1  |
-	 *   -----+-----+-----+-----+-----+-----+-----+-----+-----+
-	 *    1   |                   LX <7:0>                    |
-	 *   -----+-----------------------+-----------------------+
-	 *    2   |  0     0     0     0  |       LX <11:8>       |
-	 *   -----+-----------------------+-----------------------+
-	 *    3   |                   RX <7:0>                    |
-	 *   -----+-----------------------+-----------------------+
-	 *    4   |  0     0     0     0  |       RX <11:8>       |
-	 *   -----+-----------------------+-----------------------+
-	 *    5   |                   LY <7:0>                    |
-	 *   -----+-----------------------+-----------------------+
-	 *    6   |  0     0     0     0  |       LY <11:8>       |
-	 *   -----+-----------------------+-----------------------+
-	 *    7   |                   RY <7:0>                    |
-	 *   -----+-----------------------+-----------------------+
-	 *    8   |  0     0     0     0  |       RY <11:8>       |
-	 *   -----+-----+-----+-----+-----+-----+-----+-----+-----+
-	 *    9   | BDR | BDD | BLT | B-  | BH  | B+  | BRT |  1  |
-	 *   -----+-----+-----+-----+-----+-----+-----+-----+-----+
-	 *   10   | BZL | BB  | BY  | BA  | BX  | BZR | BDL | BDU |
-	 *   -----+-----+-----+-----+-----+-----+-----+-----+-----+
-	 *   11   |  1  |     BATTERY     | USB |CHARG|LTHUM|RTHUM|
-	 *   -----+-----+-----------------+-----------+-----+-----+
+	/*   Offset |  7  |  6  |  5  |  4  |  3  |  2  |  1  |  0  |
+	 *   -------+-----+-----+-----+-----+-----+-----+-----+-----+
+	 *    0x0   |                   LX <7:0>                    |
+	 *   -------+-----------------------+-----------------------+
+	 *    0x1   |                   LX <15:8>                   |
+	 *   -------+-----------------------+-----------------------+
+	 *    0x2   |                   RX <7:0>                    |
+	 *   -------+-----------------------+-----------------------+
+	 *    0x3   |                   RX <15:8>                   |
+	 *   -------+-----------------------+-----------------------+
+	 *    0x4   |                   LY <7:0>                    |
+	 *   -------+-----------------------+-----------------------+
+	 *    0x5   |                   LY <15:8>                   |
+	 *   -------+-----------------------+-----------------------+
+	 *    0x6   |                   RY <7:0>                    |
+	 *   -------+-----------------------+-----------------------+
+	 *    0x7   |                   RY <15:8>                   |
+	 *   -------+-----+-----+-----+-----+-----+-----+-----+-----+
+	 *    0x8   | BDR | BDD | BLT | B-  | BH  | B+  | BRT |  1  |
+	 *   -------+-----+-----+-----+-----+-----+-----+-----+-----+
+	 *    0x9   | BZL | BB  | BY  | BA  | BX  | BZR | BDL | BDU |
+	 *   -------+-----+-----+-----+-----+-----+-----+-----+-----+
+	 *    0xA   |  1  |     BATTERY     | USB |CHARG|LTHUM|RTHUM|
+	 *   -------+-----+-----------------+-----------+-----+-----+
 	 * All buttons are low-active (0 if pressed)
 	 * RX and RY are right analog stick
 	 * LX and LY are left analog stick
@@ -1891,10 +2220,15 @@ static void wiimod_pro_in_ext(struct wiimote_data *wdata, const __u8 *ext)
 	 *   BATTERY: battery capacity from 000 (empty) to 100 (full)
 	 */
 
-	lx = (ext[0] & 0xff) | ((ext[1] & 0x0f) << 8);
-	rx = (ext[2] & 0xff) | ((ext[3] & 0x0f) << 8);
-	ly = (ext[4] & 0xff) | ((ext[5] & 0x0f) << 8);
-	ry = (ext[6] & 0xff) | ((ext[7] & 0x0f) << 8);
+	s->extension.pro.battery  =  (ext[0xa] & 0x70) >> 4;
+	s->extension.pro.charging = !(ext[0xa] & 0x04);
+	s->extension.pro.wired	  = !(ext[0xa] & 0x8);
+
+	lx = wiimod_load_u16_le(ext + 0);
+	rx = wiimod_load_u16_le(ext + 2);
+	ly = wiimod_load_u16_le(ext + 4);
+	ry = wiimod_load_u16_le(ext + 6);
+
 
 	/* zero-point offsets */
 	lx -= 0x800;
@@ -1907,23 +2241,23 @@ static void wiimod_pro_in_ext(struct wiimote_data *wdata, const __u8 *ext)
 	 * null-position of the analog sticks. Users can retrigger calibration
 	 * via sysfs, or set it explicitly. If data is off more than abs(500),
 	 * we skip calibration as the sticks are likely to be moved already. */
-	if (!(wdata->state.flags & WIIPROTO_FLAG_PRO_CALIB_DONE)) {
-		wdata->state.flags |= WIIPROTO_FLAG_PRO_CALIB_DONE;
+	if (!(s->flags & WIIPROTO_FLAG_PRO_CALIB_DONE)) {
+		s->flags |= WIIPROTO_FLAG_PRO_CALIB_DONE;
 		if (abs(lx) < 500)
-			wdata->state.calib.pro.left_x = -lx;
+			s->extension.pro.calib.left_x = -lx;
 		if (abs(ly) < 500)
-			wdata->state.calib.pro.left_y = -ly;
+			s->extension.pro.calib.left_y = -ly;
 		if (abs(rx) < 500)
-			wdata->state.calib.pro.right_x = -rx;
+			s->extension.pro.calib.right_x = -rx;
 		if (abs(ry) < 500)
-			wdata->state.calib.pro.right_y = -ry;
+			s->extension.pro.calib.right_y = -ry;
 	}
 
 	/* apply calibration data */
-	lx += wdata->state.calib.pro.left_x;
-	ly += wdata->state.calib.pro.left_y;
-	rx += wdata->state.calib.pro.right_x;
-	ry += wdata->state.calib.pro.right_y;
+	lx += s->extension.pro.calib.left_x;
+	ly += s->extension.pro.calib.left_y;
+	rx += s->extension.pro.calib.right_x;
+	ry += s->extension.pro.calib.right_y;
 
 	input_report_abs(indev, ABS_X, lx);
 	input_report_abs(indev, ABS_Y, ly);
@@ -2041,15 +2375,12 @@ static ssize_t wiimod_pro_calib_show(struct device *dev,
 				     char *out)
 {
 	struct wiimote_data *wdata = dev_to_wii(dev);
-	int r;
-
-	r = 0;
-	r += sprintf(&out[r], "%+06hd:",  wdata->state.calib.pro.left_x);
-	r += sprintf(&out[r], "%+06hd ",  wdata->state.calib.pro.left_y);
-	r += sprintf(&out[r], "%+06hd:",  wdata->state.calib.pro.right_x);
-	r += sprintf(&out[r], "%+06hd\n", wdata->state.calib.pro.right_y);
-
-	return r;
+	const struct wiimote_state *s = &wdata->state;
+	return sprintf(out, "%+06hd:%+06hd %+06hd:%+06hd\n",
+		       s->extension.pro.calib.left_x,
+		       s->extension.pro.calib.left_y,
+		       s->extension.pro.calib.right_x,
+		       s->extension.pro.calib.right_y);
 }
 
 static ssize_t wiimod_pro_calib_store(struct device *dev,
@@ -2057,26 +2388,27 @@ static ssize_t wiimod_pro_calib_store(struct device *dev,
 				      const char *buf, size_t count)
 {
 	struct wiimote_data *wdata = dev_to_wii(dev);
+	struct wiimote_state *s = &wdata->state;
 	int r;
 	s16 x1, y1, x2, y2;
 
 	if (!strncmp(buf, "scan\n", 5)) {
-		spin_lock_irq(&wdata->state.lock);
-		wdata->state.flags &= ~WIIPROTO_FLAG_PRO_CALIB_DONE;
-		spin_unlock_irq(&wdata->state.lock);
+		spin_lock_irq(&s->lock);
+		s->flags &= ~WIIPROTO_FLAG_PRO_CALIB_DONE;
+		spin_unlock_irq(&s->lock);
 	} else {
 		r = sscanf(buf, "%hd:%hd %hd:%hd", &x1, &y1, &x2, &y2);
 		if (r != 4)
 			return -EINVAL;
 
-		spin_lock_irq(&wdata->state.lock);
+		spin_lock_irq(&s->lock);
 		wdata->state.flags |= WIIPROTO_FLAG_PRO_CALIB_DONE;
-		spin_unlock_irq(&wdata->state.lock);
+		spin_unlock_irq(&s->lock);
 
-		wdata->state.calib.pro.left_x = x1;
-		wdata->state.calib.pro.left_y = y1;
-		wdata->state.calib.pro.right_x = x2;
-		wdata->state.calib.pro.right_y = y2;
+		s->extension.pro.calib.left_x  = x1;
+		s->extension.pro.calib.left_y  = y1;
+		s->extension.pro.calib.right_x = x2;
+		s->extension.pro.calib.right_y = y2;
 	}
 
 	return strnlen(buf, PAGE_SIZE);
@@ -2092,18 +2424,19 @@ static int wiimod_pro_probe(const struct wiimod_ops *ops,
 	int ret, i;
 	unsigned long flags;
 	struct input_dev *indev;
+	struct wiimote_state *s = &wdata->state;
 
 	INIT_WORK(&wdata->rumble_worker, wiimod_rumble_worker);
-	wdata->state.calib.pro.left_x = 0;
-	wdata->state.calib.pro.left_y = 0;
-	wdata->state.calib.pro.right_x = 0;
-	wdata->state.calib.pro.right_y = 0;
+	s->extension.pro.calib.left_x = 0;
+	s->extension.pro.calib.left_y = 0;
+	s->extension.pro.calib.right_x = 0;
+	s->extension.pro.calib.right_y = 0;
 
-	spin_lock_irqsave(&wdata->state.lock, flags);
-	wdata->state.flags &= ~WIIPROTO_FLAG_PRO_CALIB_DONE;
-	spin_unlock_irqrestore(&wdata->state.lock, flags);
+	spin_lock_irqsave(&s->lock, flags);
+	s->flags &= ~WIIPROTO_FLAG_PRO_CALIB_DONE;
+	spin_unlock_irqrestore(&s->lock, flags);
 
-	indev = wdata->extension.input = input_allocate_device();
+	indev = wdata->ext_input = input_allocate_device();
 	if (!indev)
 		return -ENOMEM;
 
@@ -2148,6 +2481,10 @@ static int wiimod_pro_probe(const struct wiimod_ops *ops,
 	if (ret)
 		goto err_file;
 
+	/* re-create the battery */
+	wiimod_battery_remove(&wiimod_battery, wdata);
+	wiimod_battery_probe(&wiimod_battery, wdata, ext);
+
 	return 0;
 
 err_file:
@@ -2155,7 +2492,7 @@ err_file:
 			   &dev_attr_pro_calib);
 err_free:
 	input_free_device(indev);
-	wdata->extension.input = NULL;
+	wdata->ext_input = NULL;
 	return ret;
 }
 
@@ -2164,11 +2501,11 @@ static void wiimod_pro_remove(const struct wiimod_ops *ops,
 {
 	unsigned long flags;
 
-	if (!wdata->extension.input)
+	if (!wdata->ext_input)
 		return;
 
-	input_unregister_device(wdata->extension.input);
-	wdata->extension.input = NULL;
+	input_unregister_device(wdata->ext_input);
+	wdata->ext_input = NULL;
 	cancel_work_sync(&wdata->rumble_worker);
 	device_remove_file(&wdata->hdev->dev,
 			   &dev_attr_pro_calib);
@@ -2205,10 +2542,10 @@ static inline void wiimod_drums_report_pressure(struct wiimote_data *wdata,
 
 	if (!none && which == which_code) {
 		*store = pressure;
-		input_report_abs(wdata->extension.input, code, *store);
+		input_report_abs(wdata->ext_input, code, *store);
 	} else if (onoff != !!*store) {
 		*store = onoff ? default_pressure : 0;
-		input_report_abs(wdata->extension.input, code, *store);
+		input_report_abs(wdata->ext_input, code, *store);
 	}
 }
 
@@ -2216,6 +2553,7 @@ static void wiimod_drums_in_ext(struct wiimote_data *wdata, const __u8 *ext)
 {
 	__u8 pressure, which, none, hhp, sx, sy;
 	__u8 o, r, y, g, b, bass, bm, bp;
+	struct wiimote_state *s = &wdata->state;
 
 	/*   Byte |  8  |  7  |  6  |  5  |  4  |  3  |  2  |  1  |
 	 *   -----+-----+-----+-----+-----+-----+-----+-----+-----+
@@ -2269,37 +2607,37 @@ static void wiimod_drums_in_ext(struct wiimote_data *wdata, const __u8 *ext)
 	}
 
 	wiimod_drums_report_pressure(wdata, none, which, pressure,
-				     o, &wdata->state.pressure_drums[0],
+				     o, &s->extension.drums.sensor[0],
 				     ABS_HAT2Y, 0x0e);
 	wiimod_drums_report_pressure(wdata, none, which, pressure,
-				     r, &wdata->state.pressure_drums[1],
+				     r, &s->extension.drums.sensor[1],
 				     ABS_HAT0X, 0x19);
 	wiimod_drums_report_pressure(wdata, none, which, pressure,
-				     y, &wdata->state.pressure_drums[2],
+				     y, &s->extension.drums.sensor[2],
 				     ABS_HAT2X, 0x11);
 	wiimod_drums_report_pressure(wdata, none, which, pressure,
-				     g, &wdata->state.pressure_drums[3],
+				     g, &s->extension.drums.sensor[3],
 				     ABS_HAT1X, 0x12);
 	wiimod_drums_report_pressure(wdata, none, which, pressure,
-				     b, &wdata->state.pressure_drums[4],
+				     b, &s->extension.drums.sensor[4],
 				     ABS_HAT0Y, 0x0f);
 
 	/* Bass shares pressure with hi-hat (set via hhp) */
 	wiimod_drums_report_pressure(wdata, none, hhp ? 0xff : which, pressure,
-				     bass, &wdata->state.pressure_drums[5],
+				     bass, &s->extension.drums.sensor[5],
 				     ABS_HAT3X, 0x1b);
 	/* Hi-hat has no on/off values, just pressure. Force to off/0. */
 	wiimod_drums_report_pressure(wdata, none, hhp ? which : 0xff, pressure,
-				     0, &wdata->state.pressure_drums[6],
+				     0, &s->extension.drums.sensor[6],
 				     ABS_HAT3Y, 0x0e);
 
-	input_report_abs(wdata->extension.input, ABS_X, sx - 0x20);
-	input_report_abs(wdata->extension.input, ABS_Y, sy - 0x20);
+	input_report_abs(wdata->ext_input, ABS_X, sx - 0x20);
+	input_report_abs(wdata->ext_input, ABS_Y, sy - 0x20);
 
-	input_report_key(wdata->extension.input, BTN_START, bp);
-	input_report_key(wdata->extension.input, BTN_SELECT, bm);
+	input_report_key(wdata->ext_input, BTN_START, bp);
+	input_report_key(wdata->ext_input, BTN_SELECT, bm);
 
-	input_sync(wdata->extension.input);
+	input_sync(wdata->ext_input);
 }
 
 static int wiimod_drums_open(struct input_dev *dev)
@@ -2333,7 +2671,7 @@ static int wiimod_drums_probe(const struct wiimod_ops *ops,
 	int ret;
 	struct input_dev *indev;
 
-	indev = wdata->extension.input = input_allocate_device();
+	indev = wdata->ext_input = input_allocate_device();
 	if (!indev)
 		return -ENOMEM;
 
@@ -2377,7 +2715,7 @@ static int wiimod_drums_probe(const struct wiimod_ops *ops,
 	ret = input_register_device(indev);
 	if (ret) {
 		input_free_device(indev);
-		wdata->extension.input = NULL;
+		wdata->ext_input = NULL;
 	}
 
 	return ret;
@@ -2386,11 +2724,11 @@ static int wiimod_drums_probe(const struct wiimod_ops *ops,
 static void wiimod_drums_remove(const struct wiimod_ops *ops,
 				struct wiimote_data *wdata)
 {
-	if (!wdata->extension.input)
+	if (!wdata->ext_input)
 		return;
 
-	input_unregister_device(wdata->extension.input);
-	wdata->extension.input = NULL;
+	input_unregister_device(wdata->ext_input);
+	wdata->ext_input = NULL;
 }
 
 static const struct wiimod_ops wiimod_drums = {
@@ -2436,7 +2774,7 @@ static const __u16 wiimod_guitar_map[] = {
 
 static void wiimod_guitar_in_ext(struct wiimote_data *wdata, const __u8 *ext)
 {
-	struct input_dev *indev = wdata->extension.input;
+	struct input_dev *indev = wdata->ext_input;
 	__u8 sx, sy, tb, wb, bd, bm, bp, bo, br, bb, bg, by, bu;
 
 	/*   Byte |  8  |  7  |  6  |  5  |  4  |  3  |  2  |  1  |
@@ -2557,7 +2895,7 @@ static int wiimod_guitar_probe(const struct wiimod_ops *ops,
 	int ret, i;
 	struct input_dev *indev;
 
-	indev = wdata->extension.input = input_allocate_device();
+	indev = wdata->ext_input = input_allocate_device();
 	if (!indev)
 		return -ENOMEM;
 
@@ -2587,7 +2925,7 @@ static int wiimod_guitar_probe(const struct wiimod_ops *ops,
 	ret = input_register_device(indev);
 	if (ret) {
 		input_free_device(indev);
-		wdata->extension.input = NULL;
+		wdata->ext_input = NULL;
 		return ret;
 	}
 
@@ -2597,11 +2935,11 @@ static int wiimod_guitar_probe(const struct wiimod_ops *ops,
 static void wiimod_guitar_remove(const struct wiimod_ops *ops,
 				 struct wiimote_data *wdata)
 {
-	if (!wdata->extension.input)
+	if (!wdata->ext_input)
 		return;
 
-	input_unregister_device(wdata->extension.input);
-	wdata->extension.input = NULL;
+	input_unregister_device(wdata->ext_input);
+	wdata->ext_input = NULL;
 }
 
 static const struct wiimod_ops wiimod_guitar = {
@@ -2647,7 +2985,7 @@ static const __u16 wiimod_turntable_map[] = {
 
 static void wiimod_turntable_in_ext(struct wiimote_data *wdata, const __u8 *ext)
 {
-	struct input_dev *indev = wdata->extension.input;
+	struct input_dev *indev = wdata->ext_input;
 	__u8 be, cs, sx, sy, ed, rtt, rbg, rbr, rbb, ltt, lbg, lbr, lbb, bp, bm;
 	/*
 	 * Byte |  7   |  6  |  5  |  4  |  3  |  2   |  1   |  0     |
@@ -2771,7 +3109,7 @@ static int wiimod_turntable_probe(const struct wiimod_ops *ops,
 	int ret, i;
 	struct input_dev *indev;
 
-	indev = wdata->extension.input = input_allocate_device();
+	indev = wdata->ext_input = input_allocate_device();
 	if (!indev)
 		return -ENOMEM;
 
@@ -2805,7 +3143,7 @@ static int wiimod_turntable_probe(const struct wiimod_ops *ops,
 	ret = input_register_device(indev);
 	if (ret) {
 		input_free_device(indev);
-		wdata->extension.input = NULL;
+		wdata->ext_input = NULL;
 	}
 
 	return ret;
@@ -2814,11 +3152,11 @@ static int wiimod_turntable_probe(const struct wiimod_ops *ops,
 static void wiimod_turntable_remove(const struct wiimod_ops *ops,
 				    struct wiimote_data *wdata)
 {
-	if (!wdata->extension.input)
+	if (!wdata->ext_input)
 		return;
 
-	input_unregister_device(wdata->extension.input);
-	wdata->extension.input = NULL;
+	input_unregister_device(wdata->ext_input);
+	wdata->ext_input = NULL;
 }
 
 static const struct wiimod_ops wiimod_turntable = {

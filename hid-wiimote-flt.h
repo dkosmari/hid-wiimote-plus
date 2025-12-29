@@ -10,7 +10,8 @@ int wiimod_remap_flt(int x,
 		     int src_lo, int src_hi,
 		     int dst_lo, int dst_hi);
 
-int wiimod_battery_get_uvolts_flt(int raw);
+int wiimod_battery_core_get_uvolts_flt(int raw);
+int wiimod_battery_bboard_get_uvolts_flt(int raw);
 
 int wiimod_bboard_correct_weight_flt(int w, int temp, int ref_temp);
 
