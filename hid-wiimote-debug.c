@@ -20,45 +20,52 @@
 struct wiimote_debug {
 	struct wiimote_data *wdata;
 	struct dentry *eeprom;
+	struct dentry *registers;
 	struct dentry *drm;
 };
 
-static ssize_t wiidebug_eeprom_read(struct file *f, char __user *u, size_t s,
-								loff_t *off)
+static ssize_t wiidebug_memory_read(struct file *f,
+				    char __user *ubuf,
+				    size_t size,
+				    loff_t *offset,
+				    bool is_eeprom)
 {
 	struct wiimote_debug *dbg = f->private_data;
 	struct wiimote_data *wdata = dbg->wdata;
 	unsigned long flags;
 	ssize_t ret;
-	char buf[16];
-	__u16 size = 0;
+	char kbuf[16];
 
-	if (s == 0)
+	if (size == 0)
 		return -EINVAL;
-	if (*off > 0xffffff)
+	if (*offset > 0xffffff)
 		return 0;
-	if (s > 16)
-		s = 16;
+	if (size > 16)
+		size = 16;
 
 	ret = wiimote_cmd_acquire(wdata);
 	if (ret)
 		return ret;
+	{
+		spin_lock_irqsave(&wdata->state.lock, flags);
+		{
+			wdata->state.cmd_read_size = size;
+			wdata->state.cmd_read_buf = kbuf;
+			wiimote_cmd_set(wdata, WIIPROTO_REQ_RMEM, *offset & 0xffff);
+			wiiproto_req_rmem(wdata, is_eeprom, *offset, size);
+		}
+		spin_unlock_irqrestore(&wdata->state.lock, flags);
 
-	spin_lock_irqsave(&wdata->state.lock, flags);
-	wdata->state.cmd_read_size = s;
-	wdata->state.cmd_read_buf = buf;
-	wiimote_cmd_set(wdata, WIIPROTO_REQ_RMEM, *off & 0xffff);
-	wiiproto_req_reeprom(wdata, *off, s);
-	spin_unlock_irqrestore(&wdata->state.lock, flags);
+		ret = wiimote_cmd_wait(wdata);
+		if (!ret)
+			size = wdata->state.cmd_read_size;
 
-	ret = wiimote_cmd_wait(wdata);
-	if (!ret)
-		size = wdata->state.cmd_read_size;
-
-	spin_lock_irqsave(&wdata->state.lock, flags);
-	wdata->state.cmd_read_buf = NULL;
-	spin_unlock_irqrestore(&wdata->state.lock, flags);
-
+		spin_lock_irqsave(&wdata->state.lock, flags);
+		{
+			wdata->state.cmd_read_buf = NULL;
+		}
+		spin_unlock_irqrestore(&wdata->state.lock, flags);
+	}
 	wiimote_cmd_release(wdata);
 
 	if (ret)
@@ -66,20 +73,61 @@ static ssize_t wiidebug_eeprom_read(struct file *f, char __user *u, size_t s,
 	else if (size == 0)
 		return -EIO;
 
-	if (copy_to_user(u, buf, size))
+	if (copy_to_user(ubuf, kbuf, size))
 		return -EFAULT;
 
-	*off += size;
+	*offset += size;
 	ret = size;
 
 	return ret;
 }
 
+/* TODO: implement write */
+
+static loff_t wiidebug_eeprom_llseek(struct file *f,
+				     loff_t offset,
+				     int whence)
+{
+	return fixed_size_llseek(f, offset, whence, 0x1700);
+}
+
+static ssize_t wiidebug_eeprom_read(struct file *f,
+				    char __user *ubuf,
+				    size_t size,
+				    loff_t *offset)
+{
+	return wiidebug_memory_read(f, ubuf, size, offset, true);
+}
+
 static const struct file_operations wiidebug_eeprom_fops = {
 	.owner = THIS_MODULE,
-	.open = simple_open,
+	.llseek = wiidebug_eeprom_llseek,
 	.read = wiidebug_eeprom_read,
-	.llseek = generic_file_llseek,
+	.open = simple_open,
+};
+
+static loff_t wiidebug_registers_llseek(struct file *f,
+					loff_t offset,
+					int whence)
+{
+	loff_t result;
+	result = fixed_size_llseek(f, offset, whence, 0x1000000);
+	return result;
+}
+
+static ssize_t wiidebug_registers_read(struct file *f,
+				      char __user *ubuf,
+				      size_t size,
+				      loff_t *offset)
+{
+	return wiidebug_memory_read(f, ubuf, size, offset, false);
+}
+
+static const struct file_operations wiidebug_registers_fops = {
+	.owner = THIS_MODULE,
+	.llseek = wiidebug_registers_llseek,
+	.read = wiidebug_registers_read,
+	.open = simple_open,
 };
 
 static const char *wiidebug_drmmap[] = {
@@ -172,11 +220,22 @@ static const struct file_operations wiidebug_drm_fops = {
 	.release = single_release,
 };
 
+static void wiidebug_cleanup(struct wiimote_data *wdata,
+			     struct wiimote_debug *dbg)
+{
+	if (dbg->drm)
+		debugfs_remove(dbg->drm);
+	if (dbg->registers)
+		debugfs_remove(dbg->registers);
+	if (dbg->eeprom)
+		debugfs_remove(dbg->eeprom);
+	devm_kfree(&wdata->hdev->dev, dbg);
+}
+
 int wiidebug_init(struct wiimote_data *wdata)
 {
 	struct wiimote_debug *dbg;
 	unsigned long flags;
-	int ret = -ENOMEM;
 
 	dbg = devm_kzalloc(&wdata->hdev->dev, sizeof(*dbg), GFP_KERNEL);
 	if (!dbg)
@@ -184,27 +243,41 @@ int wiidebug_init(struct wiimote_data *wdata)
 
 	dbg->wdata = wdata;
 
-	dbg->eeprom = debugfs_create_file("eeprom", S_IRUSR,
-		dbg->wdata->hdev->debug_dir, dbg, &wiidebug_eeprom_fops);
-	if (!dbg->eeprom)
-		goto err;
+	dbg->eeprom = debugfs_create_file("eeprom",
+					  S_IRUSR,
+					  dbg->wdata->hdev->debug_dir,
+					  dbg,
+					  &wiidebug_eeprom_fops);
+	if (!dbg->eeprom) {
+		wiidebug_cleanup(wdata, dbg);
+		return -ENOMEM;
+	}
 
-	dbg->drm = debugfs_create_file("drm", S_IRUSR,
-			dbg->wdata->hdev->debug_dir, dbg, &wiidebug_drm_fops);
-	if (!dbg->drm)
-		goto err_drm;
+	dbg->registers = debugfs_create_file("registers",
+					     S_IRUSR,
+					     dbg->wdata->hdev->debug_dir,
+					     dbg,
+					     &wiidebug_registers_fops);
+	if (!dbg->registers) {
+		wiidebug_cleanup(wdata, dbg);
+		return -ENOMEM;
+	}
+
+	dbg->drm = debugfs_create_file("drm",
+				       S_IRUSR,
+				       dbg->wdata->hdev->debug_dir,
+				       dbg,
+				       &wiidebug_drm_fops);
+	if (!dbg->drm) {
+		wiidebug_cleanup(wdata, dbg);
+		return -ENOMEM;
+	}
 
 	spin_lock_irqsave(&wdata->state.lock, flags);
 	wdata->debug = dbg;
 	spin_unlock_irqrestore(&wdata->state.lock, flags);
 
 	return 0;
-
-err_drm:
-	debugfs_remove(dbg->eeprom);
-err:
-	devm_kfree(&wdata->hdev->dev, dbg);
-	return ret;
 }
 
 void wiidebug_deinit(struct wiimote_data *wdata)
@@ -219,9 +292,7 @@ void wiidebug_deinit(struct wiimote_data *wdata)
 	wdata->debug = NULL;
 	spin_unlock_irqrestore(&wdata->state.lock, flags);
 
-	debugfs_remove(dbg->drm);
-	debugfs_remove(dbg->eeprom);
-	devm_kfree(&wdata->hdev->dev, dbg);
+	wiidebug_cleanup(wdata, dbg);
 }
 
 #else /* CONFIG_DEBUG_FS */

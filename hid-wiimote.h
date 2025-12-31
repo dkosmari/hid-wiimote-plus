@@ -355,8 +355,9 @@ static inline void wiimote_cmd_acquire_noint(struct wiimote_data *wdata)
 }
 
 /* requires the state.lock spinlock to be held */
-static inline void wiimote_cmd_set(struct wiimote_data *wdata, int cmd,
-								__u32 opt)
+static inline void wiimote_cmd_set(struct wiimote_data *wdata,
+				   int cmd,
+				   __u32 opt)
 {
 	reinit_completion(&wdata->state.ready);
 	wdata->state.cmd = cmd;
