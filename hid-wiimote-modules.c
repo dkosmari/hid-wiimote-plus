@@ -628,7 +628,6 @@ static int wiimod_battery_bboard_get_property(struct power_supply *psy,
 	}
 }
 
-
 static int wiimod_battery_pro_get_property(struct power_supply *psy,
 					   enum power_supply_property prop,
 					   union power_supply_propval *val)
@@ -680,7 +679,6 @@ static int wiimod_battery_get_property(struct power_supply *psy,
 				       union power_supply_propval *val)
 {
 	struct wiimote_data *wdata = power_supply_get_drvdata(psy);
-	/* DEBUG */
 	switch (wdata->state.devtype) {
 	case WIIMOTE_DEV_BALANCE_BOARD:
 		return wiimod_battery_bboard_get_property(psy, prop, val);
@@ -701,14 +699,8 @@ static int wiimod_battery_probe(const struct wiimod_ops *ops,
 	(void)ops;
 	(void)ext;
 
-	/* DEBUG */
-	printk("probing battery for ext=%u, devtype=%u\n",
-	       ext, wdata->state.devtype);
-
 	switch (wdata->state.devtype) {
 	case WIIMOTE_DEV_BALANCE_BOARD:
-		/* DEBUG */
-		printk("creating battery for Balance Board\n");
 		wdata->battery_desc.properties = wiimod_battery_bboard_props;
 		wdata->battery_desc.num_properties = ARRAY_SIZE(wiimod_battery_bboard_props);
 		wdata->battery_desc.name = devm_kasprintf(&wdata->hdev->dev,
@@ -716,8 +708,6 @@ static int wiimod_battery_probe(const struct wiimod_ops *ops,
 							  wdata->hdev->uniq);
 		break;
 	case WIIMOTE_DEV_PRO_CONTROLLER:
-		/* DEBUG */
-		printk("creating battery for Wii U Pro Controller\n");
 		wdata->battery_desc.properties = wiimod_battery_pro_props;
 		wdata->battery_desc.num_properties = ARRAY_SIZE(wiimod_battery_pro_props);
 		wdata->battery_desc.name = devm_kasprintf(&wdata->hdev->dev,
@@ -725,8 +715,6 @@ static int wiimod_battery_probe(const struct wiimod_ops *ops,
 							  wdata->hdev->uniq);
 		break;
 	default:
-		/* DEBUG */
-		printk("creating battery for wiimote core\n");
 		wdata->battery_desc.properties = wiimod_battery_core_props;
 		wdata->battery_desc.num_properties = ARRAY_SIZE(wiimod_battery_core_props);
 		wdata->battery_desc.name = devm_kasprintf(&wdata->hdev->dev,
@@ -765,9 +753,6 @@ static void wiimod_battery_remove(const struct wiimod_ops *ops,
 
 	if (!wdata->battery_desc.name)
 		return;
-
-	/* DEBUG */
-	printk("removing battery: %s\n", wdata->battery_desc.name);
 
 	power_supply_unregister(wdata->battery);
 	devm_kfree(&wdata->hdev->dev, wdata->battery_desc.name);
