@@ -22,14 +22,14 @@ int wiimod_remap_flt(int x,
 }
 
 
-int wiimod_battery_core_get_uvolts_flt(int raw)
+int wiimod_battery_core_get_uvolts_raw_flt(int raw)
 {
 	float m = 5221.92f;
 	float b = 2154361.0f;
 	return m * raw + b;
 }
 
-int wiimod_battery_bboard_get_uvolts_flt(int raw)
+int wiimod_battery_bboard_get_uvolts_raw_flt(int raw)
 {
 	float m = 40642.57f;
 	float b = -76462.994f;

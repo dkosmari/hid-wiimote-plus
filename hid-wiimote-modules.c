@@ -34,6 +34,7 @@
 #include <linux/device.h>
 #include <linux/hid.h>
 #include <linux/input.h>
+#include <linux/jiffies.h>
 #include <linux/spinlock.h>
 #include <linux/version.h>
 
@@ -251,8 +252,6 @@ static enum power_supply_property wiimod_battery_core_props[] = {
 	POWER_SUPPLY_PROP_VOLTAGE_MIN_DESIGN,
 	POWER_SUPPLY_PROP_VOLTAGE_NOW,
 	POWER_SUPPLY_PROP_CAPACITY,
-	POWER_SUPPLY_PROP_CAPACITY_ALERT_MIN,
-	POWER_SUPPLY_PROP_CAPACITY_ALERT_MAX,
 	POWER_SUPPLY_PROP_CAPACITY_LEVEL,
 	POWER_SUPPLY_PROP_SCOPE,
 	POWER_SUPPLY_PROP_MODEL_NAME,
@@ -267,8 +266,6 @@ static enum power_supply_property wiimod_battery_bboard_props[] = {
 	POWER_SUPPLY_PROP_VOLTAGE_MIN_DESIGN,
 	POWER_SUPPLY_PROP_VOLTAGE_NOW,
 	POWER_SUPPLY_PROP_CAPACITY,
-	POWER_SUPPLY_PROP_CAPACITY_ALERT_MIN,
-	POWER_SUPPLY_PROP_CAPACITY_ALERT_MAX,
 	POWER_SUPPLY_PROP_CAPACITY_LEVEL,
 	POWER_SUPPLY_PROP_SCOPE,
 	POWER_SUPPLY_PROP_MODEL_NAME,
@@ -286,39 +283,62 @@ static enum power_supply_property wiimod_battery_pro_props[] = {
 	POWER_SUPPLY_PROP_SERIAL_NUMBER,
 };
 
-static int wiimod_battery_core_request_update(struct wiimote_data *wdata,
-					      int *value,
-					      bool *crit)
+static bool wiimod_battery_core_needs_update(const struct wiimote_state *wstate)
+{
+	if (!wstate->battery.last_update)
+		return true;
+	return get_jiffies_64() > wstate->battery.last_update + msecs_to_jiffies(1000u);
+}
+
+static int wiimod_battery_core_request_update(struct wiimote_data *wdata)
 {
 	int ret;
 	unsigned long flags;
 
-	/* DEBUG */
-	printk("requesting wiimote battery status\n");
-
 	ret = wiimote_cmd_acquire(wdata);
 	if (ret)
 		return ret;
+	{
+		spin_lock_irqsave(&wdata->state.lock, flags);
+		{
+			wiimote_cmd_set(wdata, WIIPROTO_REQ_SREQ, 0);
+			wiiproto_req_status(wdata);
+		}
+		spin_unlock_irqrestore(&wdata->state.lock, flags);
 
-	spin_lock_irqsave(&wdata->state.lock, flags);
-	wiimote_cmd_set(wdata, WIIPROTO_REQ_SREQ, 0);
-	wiiproto_req_status(wdata);
-	spin_unlock_irqrestore(&wdata->state.lock, flags);
-
-	ret = wiimote_cmd_wait(wdata);
-
+		ret = wiimote_cmd_wait(wdata);
+	}
 	wiimote_cmd_release(wdata);
 
 	if (ret)
 		return ret;
 
 	spin_lock_irqsave(&wdata->state.lock, flags);
-	*value = wdata->state.cmd_battery;
-	*crit = wdata->state.cmd_battery_crit;
-
+	{
+		wdata->state.battery.value	 = wdata->state.status_battery;
+		wdata->state.battery.crit	 = wdata->state.status_crit;
+		wdata->state.battery.last_update = get_jiffies_64();
+	}
 	spin_unlock_irqrestore(&wdata->state.lock, flags);
 
 	return 0;
+}
+
+static int wiimod_battery_core_get_value(struct wiimote_data *wdata)
+{
+	unsigned long flags;
+	bool needs_update;
+
+	spin_lock_irqsave(&wdata->state.lock, flags);
+	{
+		needs_update = wiimod_battery_core_needs_update(&wdata->state);
+	}
+	spin_unlock_irqrestore(&wdata->state.lock, flags);
+
+	if (needs_update)
+		return wiimod_battery_core_request_update(wdata);
+	else
+		return 0;
 }
 
 /* Note: threshold values taken from Wii U's padscore library. */
@@ -332,7 +352,7 @@ enum wiimod_battery_core_bars {
 };
 
 enum wiimod_battery_bboard_bars {
-	WIIMOD_BATTERY_BBOARD_BARS_0   = 0x69,
+	WIIMOD_BATTERY_BBOARD_BARS_0   = 0x69, /* all balance boards are calibrated with this*/
 	WIIMOD_BATTERY_BBOARD_BARS_1   = 0x6a,
 	WIIMOD_BATTERY_BBOARD_BARS_2   = 0x78,
 	WIIMOD_BATTERY_BBOARD_BARS_3   = 0x7d,
@@ -340,8 +360,9 @@ enum wiimod_battery_bboard_bars {
 	WIIMOD_BATTERY_BBOARD_BARS_MAX = 0xa0,	/* four alkaline batteries at 1.6 V */
 };
 
-static int wiimod_battery_core_get_capacity(int raw)
+static int wiimod_battery_core_get_capacity(const struct wiimote_data *wdata)
 {
+	int raw = wdata->state.battery.value;
 	// Use a piecewise linar approximation.
 	if (raw >= WIIMOD_BATTERY_CORE_BARS_4)
 		return wiimod_remap(raw,
@@ -362,8 +383,9 @@ static int wiimod_battery_core_get_capacity(int raw)
 	return 0;
 }
 
-static int wiimod_battery_bboard_get_capacity(int raw)
+static int wiimod_battery_bboard_get_capacity(const struct wiimote_data *wdata)
 {
+	int raw = wdata->state.extension.bboard.battery;
 	// Use a piecewise linar approximation.
 	if (raw >= WIIMOD_BATTERY_BBOARD_BARS_4)
 		return wiimod_remap(raw,
@@ -384,9 +406,9 @@ static int wiimod_battery_bboard_get_capacity(int raw)
 	return 0;
 }
 
-static int wiimod_battery_pro_get_capacity(int level)
+static int wiimod_battery_pro_get_capacity(const struct wiimote_data *wdata)
 {
-	switch (level) {
+	switch (wdata->state.extension.pro.battery) {
 	case 4:
 		return 100;
 	case 3:
@@ -402,53 +424,64 @@ static int wiimod_battery_pro_get_capacity(int level)
 	}
 }
 
-static int wiimod_battery_core_get_uvolts_int(int raw)
+static int wiimod_battery_core_get_uvolts_raw_int(int raw)
 {
 	static const __s64 m = 5222;
 	static const __s64 b = 2154361;
 	return m * raw + b;
 }
 
-static int wiimod_battery_core_get_uvolts(int raw)
+static int wiimod_battery_core_get_uvolts_raw(int raw)
 {
 #ifdef WIIMOTE_ENABLE_FPU
 	int result;
 	if (!kernel_fpu_available())
-		return wiimod_battery_core_get_uvolts_int(raw);
+		return wiimod_battery_core_get_uvolts_raw_int(raw);
 	kernel_fpu_begin();
-	result = wiimod_battery_core_get_uvolts_flt(raw);
+	result = wiimod_battery_core_get_uvolts_raw_flt(raw);
 	kernel_fpu_end();
 	return result;
 #else /* !WIIMOTE_ENABLE_FPU */
-	return wiimod_battery_core_get_uvolts_int(raw);
+	return wiimod_battery_core_get_uvolts_raw_int(raw);
 #endif
 }
 
-static int wiimod_battery_bboard_get_uvolts_int(int raw)
+static int wiimod_battery_core_get_uvolts(const struct wiimote_data *wdata)
+{
+	return wiimod_battery_core_get_uvolts_raw(wdata->state.battery.value);
+}
+
+static int wiimod_battery_bboard_get_uvolts_raw_int(int raw)
 {
 	static const __s64 m = 40643;
 	static const __s64 b = -76463;
 	return m * raw + b;
 }
 
-static int wiimod_battery_bboard_get_uvolts(int raw)
+static int wiimod_battery_bboard_get_uvolts_raw(int raw)
 {
 #ifdef WIIMOTE_ENABLE_FPU
 	int result;
 	if (!kernel_fpu_available())
-		return wiimod_battery_bboard_get_uvolts_int(raw);
+		return wiimod_battery_bboard_get_uvolts_raw_int(raw);
 	kernel_fpu_begin();
-	result = wiimod_battery_bboard_get_uvolts_flt(raw);
+	result = wiimod_battery_bboard_get_uvolts_raw_flt(raw);
 	kernel_fpu_end();
 	return result;
 #else /* !WIIMOTE_ENABLE_FPU */
-	return wiimod_battery_bboard_get_uvolts_int(raw);
+	return wiimod_battery_bboard_get_uvolts_raw_int(raw);
 #endif
 }
 
-static int wiimod_battery_core_get_capacity_level(int raw, bool crit)
+static int wiimod_battery_bboard_get_uvolts(const struct wiimote_data *wdata)
 {
-	if (crit)
+	return wiimod_battery_bboard_get_uvolts_raw(wdata->state.extension.bboard.battery);
+}
+
+static int wiimod_battery_core_get_capacity_level(const struct wiimote_data *wdata)
+{
+	int raw = wdata->state.battery.value;
+	if (wdata->state.battery.crit)
 		return POWER_SUPPLY_CAPACITY_LEVEL_CRITICAL;
 	if (raw >= WIIMOD_BATTERY_CORE_BARS_4)
 		return POWER_SUPPLY_CAPACITY_LEVEL_FULL;
@@ -461,8 +494,9 @@ static int wiimod_battery_core_get_capacity_level(int raw, bool crit)
 	return POWER_SUPPLY_CAPACITY_LEVEL_CRITICAL;
 }
 
-static int wiimod_battery_bboard_get_capacity_level(int raw)
+static int wiimod_battery_bboard_get_capacity_level(const struct wiimote_data *wdata)
 {
+	int raw = wdata->state.extension.bboard.battery;
 	if (raw >= WIIMOD_BATTERY_BBOARD_BARS_4)
 		return POWER_SUPPLY_CAPACITY_LEVEL_FULL;
 	if (raw >= WIIMOD_BATTERY_BBOARD_BARS_3)
@@ -474,9 +508,9 @@ static int wiimod_battery_bboard_get_capacity_level(int raw)
 	return POWER_SUPPLY_CAPACITY_LEVEL_CRITICAL;
 }
 
-static int wiimod_battery_pro_get_capacity_level(int level)
+static int wiimod_battery_pro_get_capacity_level(const struct wiimote_data *wdata)
 {
-	switch (level) {
+	switch (wdata->state.extension.pro.battery) {
 	case 4:
 		return POWER_SUPPLY_CAPACITY_LEVEL_FULL;
 	case 3:
@@ -497,8 +531,7 @@ static int wiimod_battery_core_get_property(struct power_supply *psy,
 					    union power_supply_propval *val)
 {
 	struct wiimote_data *wdata = power_supply_get_drvdata(psy);
-	int ret = 0, raw = 0;
-	bool crit = false;
+	int ret = 0;
 
 	switch (prop) {
 	case POWER_SUPPLY_PROP_STATUS:
@@ -509,38 +542,31 @@ static int wiimod_battery_core_get_property(struct power_supply *psy,
 		val->intval = 1;
 		return 0;
 	case POWER_SUPPLY_PROP_VOLTAGE_MAX_DESIGN:
-		/* Assume 2 AA alkaline batteries is max. */
-		val->intval = 3200000;
+		val->intval = 3200000; /* Assume 2 AA alkaline batteries is max. */
 		return 0;
 	case POWER_SUPPLY_PROP_VOLTAGE_MIN_DESIGN:
-		val->intval = wiimod_battery_core_get_uvolts(WIIMOD_BATTERY_CORE_BARS_0);
+		val->intval = wiimod_battery_core_get_uvolts_raw(WIIMOD_BATTERY_CORE_BARS_1);
 		return 0;
 	case POWER_SUPPLY_PROP_VOLTAGE_NOW:
-		ret = wiimod_battery_core_request_update(wdata, &raw, &crit);
+		ret = wiimod_battery_core_get_value(wdata);
 		if (ret)
 			return ret;
-		val->intval = wiimod_battery_core_get_uvolts(raw);
+		val->intval = wiimod_battery_core_get_uvolts(wdata);
 		return 0;
 	case POWER_SUPPLY_PROP_CAPACITY:
-		ret = wiimod_battery_core_request_update(wdata, &raw, &crit);
+		ret = wiimod_battery_core_get_value(wdata);
 		if (ret)
 			return ret;
-		val->intval = wiimod_battery_core_get_capacity(raw);
+		val->intval = wiimod_battery_core_get_capacity(wdata);
 		/* Note: lots of userspace tools don't like capacity above 100% */
 		if (val->intval > 100)
 			val->intval = 100;
 		return 0;
-	case POWER_SUPPLY_PROP_CAPACITY_ALERT_MIN:
-		val->intval = wiimod_battery_core_get_capacity(WIIMOD_BATTERY_CORE_BARS_1);
-		return 0;
-	case POWER_SUPPLY_PROP_CAPACITY_ALERT_MAX:
-		val->intval = wiimod_battery_core_get_capacity(WIIMOD_BATTERY_CORE_BARS_4);
-		return 0;
 	case POWER_SUPPLY_PROP_CAPACITY_LEVEL:
-		ret = wiimod_battery_core_request_update(wdata, &raw, &crit);
+		ret = wiimod_battery_core_get_value(wdata);
 		if (ret)
 			return ret;
-		val->intval = wiimod_battery_core_get_capacity_level(raw, crit);
+		val->intval = wiimod_battery_core_get_capacity_level(wdata);
 		return 0;
 	case POWER_SUPPLY_PROP_SCOPE:
 		val->intval = POWER_SUPPLY_SCOPE_DEVICE;
@@ -561,8 +587,6 @@ static int wiimod_battery_bboard_get_property(struct power_supply *psy,
 					      union power_supply_propval *val)
 {
 	struct wiimote_data *wdata = power_supply_get_drvdata(psy);
-	int raw = wdata->state.extension.bboard.battery;
-	int cal_min = wdata->state.extension.bboard.calib.battery;
 
 	switch (prop) {
 	case POWER_SUPPLY_PROP_STATUS:
@@ -573,29 +597,22 @@ static int wiimod_battery_bboard_get_property(struct power_supply *psy,
 		val->intval = 1;
 		return 0;
 	case POWER_SUPPLY_PROP_VOLTAGE_MAX_DESIGN:
-		/* Assume 2 AA alkaline batteries is max. */
-		val->intval = 6400000;
+		val->intval = 6400000; /* Assume 4 AA alkaline batteries is max. */
 		return 0;
 	case POWER_SUPPLY_PROP_VOLTAGE_MIN_DESIGN:
-		val->intval = wiimod_battery_bboard_get_uvolts(cal_min);
+		val->intval = wiimod_battery_bboard_get_uvolts_raw(WIIMOD_BATTERY_BBOARD_BARS_1);
 		return 0;
 	case POWER_SUPPLY_PROP_VOLTAGE_NOW:
-		val->intval = wiimod_battery_bboard_get_uvolts(raw);
+		val->intval = wiimod_battery_bboard_get_uvolts(wdata);
 		return 0;
 	case POWER_SUPPLY_PROP_CAPACITY:
-		val->intval = wiimod_battery_bboard_get_capacity(raw);
+		val->intval = wiimod_battery_bboard_get_capacity(wdata);
 		/* Note: lots of userspace tools don't like capacity above 100% */
 		if (val->intval > 100)
 			val->intval = 100;
 		return 0;
-	case POWER_SUPPLY_PROP_CAPACITY_ALERT_MIN:
-		val->intval = wiimod_battery_bboard_get_capacity(cal_min);
-		return 0;
-	case POWER_SUPPLY_PROP_CAPACITY_ALERT_MAX:
-		val->intval = wiimod_battery_bboard_get_capacity(WIIMOD_BATTERY_BBOARD_BARS_4);
-		return 0;
 	case POWER_SUPPLY_PROP_CAPACITY_LEVEL:
-		val->intval = wiimod_battery_bboard_get_capacity_level(raw);
+		val->intval = wiimod_battery_bboard_get_capacity_level(wdata);
 		return 0;
 	case POWER_SUPPLY_PROP_SCOPE:
 		val->intval = POWER_SUPPLY_SCOPE_DEVICE;
@@ -618,7 +635,6 @@ static int wiimod_battery_pro_get_property(struct power_supply *psy,
 {
 	struct wiimote_data *wdata = power_supply_get_drvdata(psy);
 	int ret = 0;
-	int level = wdata->state.extension.pro.battery;
 
 	switch (prop) {
 	case POWER_SUPPLY_PROP_STATUS:
@@ -634,13 +650,13 @@ static int wiimod_battery_pro_get_property(struct power_supply *psy,
 		val->intval = 1;
 		return 0;
 	case POWER_SUPPLY_PROP_CAPACITY:
-		ret = wiimod_battery_pro_get_capacity(level);
+		ret = wiimod_battery_pro_get_capacity(wdata);
 		if (ret < 0)
 			return -EIO;
 		val->intval = ret;
 		return 0;
 	case POWER_SUPPLY_PROP_CAPACITY_LEVEL:
-		ret = wiimod_battery_pro_get_capacity_level(level);
+		ret = wiimod_battery_pro_get_capacity_level(wdata);
 		if (ret < 0)
 			return -EIO;
 		val->intval = ret;
@@ -664,6 +680,7 @@ static int wiimod_battery_get_property(struct power_supply *psy,
 				       union power_supply_propval *val)
 {
 	struct wiimote_data *wdata = power_supply_get_drvdata(psy);
+	/* DEBUG */
 	switch (wdata->state.devtype) {
 	case WIIMOTE_DEV_BALANCE_BOARD:
 		return wiimod_battery_bboard_get_property(psy, prop, val);

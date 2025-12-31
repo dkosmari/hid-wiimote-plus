@@ -1458,8 +1458,8 @@ static void handler_status(struct wiimote_data *wdata, const __u8 *payload)
 		}
 	}
 
-	wdata->state.cmd_battery = payload[5];
-	wdata->state.cmd_battery_crit = payload[2] & 0x01;
+	wdata->state.status_battery = payload[5];
+	wdata->state.status_crit = payload[2] & 0x01;
 
 	if (wiimote_cmd_pending(wdata, WIIPROTO_REQ_SREQ, 0))
 		wiimote_cmd_complete(wdata);
@@ -1771,7 +1771,7 @@ static struct wiimote_data *wiimote_create(struct hid_device *hdev)
 	init_completion(&wdata->state.ready);
 	mutex_init(&wdata->state.sync);
 	wdata->state.drm = WIIPROTO_REQ_DRM_K;
-	wdata->state.cmd_battery = 0xff;
+	wdata->state.status_battery = 0xff;
 
 	INIT_WORK(&wdata->init_worker, wiimote_init_worker);
 	timer_setup(&wdata->timer, wiimote_init_timeout, 0);

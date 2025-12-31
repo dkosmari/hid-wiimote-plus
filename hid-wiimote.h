@@ -133,18 +133,20 @@ struct wiimote_state {
 	__u32 opt;
 
 	/* results of synchronous requests */
-	__u8 cmd_battery;
-	bool cmd_battery_crit;
+	__u8 status_battery;
+	bool status_crit;
 	__u8 cmd_err;
 	__u8 *cmd_read_buf;
 	__u8 cmd_read_size;
 
+	struct {
+		__u64 last_update;
+		__u8 value;
+		bool crit;
+	} battery;
+	
 	/* extension data */
 	union {
-		struct {
-			__u8 battery;
-			bool crit;
-		} core;
 		struct {
 			struct {
 				__u8 battery;
