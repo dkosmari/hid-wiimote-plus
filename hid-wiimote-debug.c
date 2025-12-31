@@ -147,10 +147,10 @@ static ssize_t wiidebug_eeprom_read(struct file *f,
 	return wiidebug_memory_read(f, ubuf, size, offset, true);
 }
 
-ssize_t wiidebug_eeprom_write(struct file * f,
-			      const char __user *ubuf,
-			      size_t size,
-			      loff_t *offset)
+static ssize_t wiidebug_eeprom_write(struct file * f,
+				     const char __user *ubuf,
+				     size_t size,
+				     loff_t *offset)
 {
 	return wiidebug_memory_write(f, ubuf, size, offset, true);
 }
@@ -180,10 +180,10 @@ static ssize_t wiidebug_registers_read(struct file *f,
 	return wiidebug_memory_read(f, ubuf, size, offset, false);
 }
 
-ssize_t wiidebug_registers_write(struct file * f,
-				 const char __user *ubuf,
-				 size_t size,
-				 loff_t *offset)
+static ssize_t wiidebug_registers_write(struct file * f,
+					const char __user *ubuf,
+					size_t size,
+					loff_t *offset)
 {
 	return wiidebug_memory_write(f, ubuf, size, offset, false);
 }
