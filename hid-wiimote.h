@@ -306,10 +306,12 @@ extern void wiiproto_req_accel(struct wiimote_data *wdata, __u8 accel);
 extern void wiiproto_req_ir1(struct wiimote_data *wdata, __u8 flags);
 extern void wiiproto_req_ir2(struct wiimote_data *wdata, __u8 flags);
 extern int wiimote_cmd_write(struct wiimote_data *wdata, __u32 offset,
-						const __u8 *wmem, __u8 size);
+			     const __u8 *wmem, __u8 size);
 extern ssize_t wiimote_cmd_read(struct wiimote_data *wdata, __u32 offset,
 				__u8 *rmem, __u8 size);
 
+extern void wiiproto_req_wmem(struct wiimote_data *wdata, bool eeprom,
+			      __u32 offset, const __u8 *buf, __u8 size);
 #define wiiproto_req_rreg(wdata, os, sz) \
 	wiiproto_req_rmem((wdata), false, (os), (sz))
 #define wiiproto_req_reeprom(wdata, os, sz) \

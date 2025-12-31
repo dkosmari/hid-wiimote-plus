@@ -82,7 +82,55 @@ static ssize_t wiidebug_memory_read(struct file *f,
 	return ret;
 }
 
-/* TODO: implement write */
+static ssize_t wiidebug_memory_write(struct file *f,
+				     const char __user *ubuf,
+				     size_t size,
+				     loff_t *offset,
+				     bool is_eeprom)
+{
+	struct wiimote_debug *dbg = f->private_data;
+	struct wiimote_data *wdata = dbg->wdata;
+	unsigned long flags;
+	ssize_t ret;
+	char kbuf[16];
+
+	if (size == 0)
+		return -EINVAL;
+	if (*offset > 0xffffff)
+		return 0;
+	if (size > 16)
+		size = 16;
+
+	if (copy_from_user(kbuf, ubuf, size))
+		return -EFAULT;
+
+	ret = wiimote_cmd_acquire(wdata);
+	if (ret)
+		return ret;
+	{
+		spin_lock_irqsave(&wdata->state.lock, flags);
+		{
+			wiimote_cmd_set(wdata, WIIPROTO_REQ_WMEM, 0);
+			wiiproto_req_wmem(wdata, is_eeprom, *offset, kbuf, size);
+		}
+		spin_unlock_irqrestore(&wdata->state.lock, flags);
+
+		ret = wiimote_cmd_wait(wdata);
+		if (!ret && wdata->state.cmd_err)
+			ret = -EIO;
+	}
+	wiimote_cmd_release(wdata);
+
+	if (ret)
+		return ret;
+	else if (size == 0)
+		return -EIO;
+
+	*offset += size;
+	ret = size;
+
+	return ret;
+}
 
 static loff_t wiidebug_eeprom_llseek(struct file *f,
 				     loff_t offset,
@@ -99,10 +147,19 @@ static ssize_t wiidebug_eeprom_read(struct file *f,
 	return wiidebug_memory_read(f, ubuf, size, offset, true);
 }
 
+ssize_t wiidebug_eeprom_write(struct file * f,
+			      const char __user *ubuf,
+			      size_t size,
+			      loff_t *offset)
+{
+	return wiidebug_memory_write(f, ubuf, size, offset, true);
+}
+
 static const struct file_operations wiidebug_eeprom_fops = {
 	.owner = THIS_MODULE,
 	.llseek = wiidebug_eeprom_llseek,
 	.read = wiidebug_eeprom_read,
+	.write = wiidebug_eeprom_write,
 	.open = simple_open,
 };
 
@@ -123,10 +180,19 @@ static ssize_t wiidebug_registers_read(struct file *f,
 	return wiidebug_memory_read(f, ubuf, size, offset, false);
 }
 
+ssize_t wiidebug_registers_write(struct file * f,
+				 const char __user *ubuf,
+				 size_t size,
+				 loff_t *offset)
+{
+	return wiidebug_memory_write(f, ubuf, size, offset, false);
+}
+
 static const struct file_operations wiidebug_registers_fops = {
 	.owner = THIS_MODULE,
 	.llseek = wiidebug_registers_llseek,
 	.read = wiidebug_registers_read,
+	.write = wiidebug_registers_write,
 	.open = simple_open,
 };
 

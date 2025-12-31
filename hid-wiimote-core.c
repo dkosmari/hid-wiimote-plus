@@ -314,8 +314,8 @@ void wiiproto_req_ir2(struct wiimote_data *wdata, __u8 flags)
 #define wiiproto_req_weeprom(wdata, os, buf, sz) \
 	wiiproto_req_wmem((wdata), true, (os), (buf), (sz))
 
-static void wiiproto_req_wmem(struct wiimote_data *wdata, bool eeprom,
-				__u32 offset, const __u8 *buf, __u8 size)
+void wiiproto_req_wmem(struct wiimote_data *wdata, bool eeprom,
+		       __u32 offset, const __u8 *buf, __u8 size)
 {
 	__u8 cmd[22];
 
