@@ -1,12 +1,10 @@
-hid-wiimote-plus
-================
+# hid-wiimote-plus
 
 This is a modification of the built-in Linux kernel module for Nintendo Wii remotes. It's
 a drop-in replacement for the original module.
 
 
-How is it different from the original Linux driver?
----------------------------------------------------
+## Differences from the original Linux driver
 
 The original driver does not follow the [Linux input conventions](gamepad.rst). This table shows how
 the inputs are handled differently:
@@ -23,15 +21,17 @@ the inputs are handled differently:
 | Motion Plus | Does not report `INPUT_PROP_ACCELEROMETER`. | Reports `INPUT_PROP_ACCELEROMETER`. | Applications won't be fooled into thinking it's a positional input. |
 | CC and CCPro | Has an option to emulate the left stick with the d-pad. | Does not have this option. | Emulating/remapping input does not belong to a device driver. |
 
-Battery charge reporting has been slightly improved.
+Battery reporting is more detailed, and there's special handling for the Wii U Pro
+Controller and Balance Board devices.
 
-Memory allocations are now managed by the device node; this ensures all memory is
-deallocated when the device disconnects.
+In the debugfs interface, the original driver only exposes the EEPROM as read-only; now
+it's also writeable, and the registers are also available.
+
+Memory allocations are now tied to the device node; this ensures no memory can leak after
+the device disconnects.
 
 
-
-Installation
-------------
+## Installation
 
 You will need the kernel development headers in your system. Additionally, you will need
 the **DKMS** package; it allows for easy install and uninstall, and will automatically
@@ -54,8 +54,7 @@ not needed in this case):
     sudo insmod ./hid-wiimote.ko
 
 
-Udev rules
-----------
+## Udev rules
 
 The script [99-wiimote.rules](99-wiimote.rules) is installed automatically to
 `/etc/udev/rules.d`. It forces most devices to have global read/write permissions

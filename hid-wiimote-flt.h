@@ -3,6 +3,7 @@
  * HID driver for Nintendo Wii / Wii U peripherals
  * Copyright (c) 2025 Daniel K. O.
  */
+
 #ifndef __HID_WIIMOTE_FLT_H
 #define __HID_WIIMOTE_FLT_H
 

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-2.0-or-later
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 /*
  * Device Modules for Nintendo Wii / Wii U HID Driver
  * Copyright (c) 2025 Daniel K. O.
