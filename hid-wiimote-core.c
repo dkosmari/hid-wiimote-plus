@@ -13,6 +13,7 @@
 #include <linux/module.h>
 #include <linux/mutex.h>
 #include <linux/spinlock.h>
+#include <linux/timer.h>
 #include <linux/version.h>
 
 #include "hid-wiimote.h"
@@ -22,6 +23,13 @@
 #define USB_DEVICE_ID_NINTENDO_WIIMOTE	0x0306
 #define USB_DEVICE_ID_NINTENDO_WIIMOTE2	0x0330
 
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 16, 0)
+#ifndef timer_container_of
+#define timer_container_of(var, callback_timer, timer_fieldname)	\
+	container_of(callback_timer, typeof(*var), timer_fieldname)
+#endif
+#endif
 
 /* output queue handling */
 
@@ -1254,7 +1262,7 @@ static void wiimote_schedule(struct wiimote_data *wdata)
 
 static void wiimote_init_timeout(struct timer_list *t)
 {
-	struct wiimote_data *wdata = from_timer(wdata, t, timer);
+	struct wiimote_data *wdata = timer_container_of(wdata, t, timer);
 
 	wiimote_schedule(wdata);
 }
