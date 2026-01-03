@@ -1,0 +1,18 @@
+### This file should go into /etc/udev/hwdb.d/
+
+### This is needed to convince udev these devices are all game controllers.
+
+evdev:name:Nintendo Wii Remote:*
+evdev:name:Nintendo Wii Remote Accelerometer:*
+evdev:name:Nintendo Wii Remote Balance Board:*
+evdev:name:Nintendo Wii Remote Classic Controller Pro:*
+evdev:name:Nintendo Wii Remote Classic Controller:*
+evdev:name:Nintendo Wii Remote Drums:*
+evdev:name:Nintendo Wii Remote Guitar:*
+evdev:name:Nintendo Wii Remote IR:*
+evdev:name:Nintendo Wii Remote Motion Plus:*
+evdev:name:Nintendo Wii Remote Nunchuk:*
+evdev:name:Nintendo Wii Remote Pro Controller:*
+evdev:name:Nintendo Wii Remote Turntable:*
+ ID_INPUT_JOYSTICK=1
+

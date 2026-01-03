@@ -9,6 +9,7 @@ VERSION := 0.9.2+
 DISTDIR := $(PACKAGE)-$(VERSION)
 
 DISTFILES := \
+	99-wiimote.hwdb \
 	99-wiimote.rules \
 	COPYING \
 	dkms.conf.in \
@@ -52,6 +53,8 @@ dist:
 
 
 install:
+	-cp --target-directory=/etc/udev/hwdb.d 99-wiimote.hwdb
+	systemd-hwdb update
 	-cp --target-directory=/etc/udev/rules.d 99-wiimote.rules
 	$(RM) --recursive $(SRCTREE)/$(DISTDIR)
 	mkdir --parents $(SRCTREE)/$(DISTDIR)
@@ -63,6 +66,7 @@ install:
 
 
 uninstall:
+	$(RM) /etc/udev/hwdb.d/99-wiimote.hwdb
 	$(RM) /etc/udev/rules.d/99-wiimote.rules
 	-dkms remove -m $(PACKAGE) -v $(VERSION) --all
 	$(RM) --recursive $(SRCTREE)/$(DISTDIR)

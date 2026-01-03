@@ -54,32 +54,30 @@ not needed in this case):
     sudo insmod ./hid-wiimote.ko
 
 
-## Udev rules
+## Udev scripts
 
-The script [99-wiimote.rules](99-wiimote.rules) is installed automatically to
-`/etc/udev/rules.d`. It forces most devices to have global read/write permissions
-(`MODE="0666"`) and tags them to be game input devices (`ENV{ID_INPUT_JOYSTICK}="1"`) with
-rules like this:
+Two scripts will be installed to `/etc/udev/`:
 
-```
-SUBSYSTEM=="input", ATTR{name}=="Nintendo Wii Remote", MODE="0666", ENV{ID_INPUT_JOYSTICK}="1"
-```
+  - [`/etc/udev/rules.d/99-wiimote.rules`](99-wiimote.rules): this will ensure the devices
+    have global read-write permissions (`MODE=0666`).
 
-To inhibit a particular device (that is, stop it from generating input events), a
-different rule is used:
+    You can edit this file to inhibit devices that do not intend to use, to prevent
+    games from reading (and possibly misinterpreting the inputs) from them.
 
-```
-SUBSYSTEM=="input", ATTR{name}=="Nintendo Wii Remote IR", ATTR{inhibited}="1"
-```
+    > **By default, accelerometer, gyro and IR inputs are all inhibited.**
+    
+    > After editing this file, you have to unplug/disconnect the controller, and
+    > plug/connect it again.
 
-This may be necessary for games that cannot handle accelerometer or gyro data
-correctly. Some games may also keep reading from all available devices even when they're
-not used, which increases power consumption.
+  - [`/etc/udev/hwdb.d/99-wiimote.hwdb`](99-wiimote.hwdb): this forces all wiimote devices
+    to be interpreted as joysticks (`ID_INPUT_JOYSTICK=1`).
 
-**By default, accelerometer, gyro and IR inputs are all inhibited.** This will cause the
-least amount of headaches. Edit `/etc/udev/rules.d/99-wiimote.rules` if you want to enable
-one of these devices; changes to the udev rules will take effect next time the device is
-connected.
+    > After editing this file, remember to run `sudo systemd-hwdb update`.
+
+
+## Testing
 
 You can use the `evemu-record` command from the `evemu` package to test if a device is
-working as intended.
+generating events.
+
+Battery information can be checked with `upower -d`, or `inxi -B`.

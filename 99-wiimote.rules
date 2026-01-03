@@ -1,26 +1,27 @@
-SUBSYSTEM=="input", ATTR{name}=="Nintendo Wii Remote", MODE="0666", ENV{ID_INPUT_JOYSTICK}="1"
-### To stop it from generating events, use the rule below instead:
+### This file should go into /etc/udev/rules.d/
+
+### These rules give global permissions to the device node.
+
+SUBSYSTEM=="input", ATTR{name}=="Nintendo Wii Remote", MODE="0666"
+SUBSYSTEM=="input", ATTR{name}=="Nintendo Wii Remote Accelerometer", MODE="0666"
+SUBSYSTEM=="input", ATTR{name}=="Nintendo Wii Remote Balance Board", MODE="0666"
+SUBSYSTEM=="input", ATTR{name}=="Nintendo Wii Remote Classic Controller Pro", MODE="0666"
+SUBSYSTEM=="input", ATTR{name}=="Nintendo Wii Remote Classic Controller", MODE="0666"
+SUBSYSTEM=="input", ATTR{name}=="Nintendo Wii Remote Drums", MODE="0666"
+SUBSYSTEM=="input", ATTR{name}=="Nintendo Wii Remote Guitar", MODE="0666"
+SUBSYSTEM=="input", ATTR{name}=="Nintendo Wii Remote IR", MODE="0666"
+SUBSYSTEM=="input", ATTR{name}=="Nintendo Wii Remote Motion Plus", MODE="0666"
+SUBSYSTEM=="input", ATTR{name}=="Nintendo Wii Remote Nunchuk", MODE="0666"
+SUBSYSTEM=="input", ATTR{name}=="Nintendo Wii Remote Pro Controller", MODE="0666"
+SUBSYSTEM=="input", ATTR{name}=="Nintendo Wii Remote Turntable", MODE="0666"
+
+
+### Some games will open all available game controllers, and this will keep the wiimote's
+### IR, accelerometer, gyro sensors running. If you don't want that (in order to save some
+### battery), the rules below will inhibit them; the device will still be present, but
+### will never generate any event.
+
 #SUBSYSTEM=="input", ATTR{name}=="Nintendo Wii Remote", ATTR{inhibited}="1"
-
-#SUBSYSTEM=="input", ATTR{name}=="Nintendo Wii Remote IR", MODE="0666", ENV{ID_INPUT_JOYSTICK}="1"
-### To stop it from generating events, use the rule below instead:
 SUBSYSTEM=="input", ATTR{name}=="Nintendo Wii Remote IR", ATTR{inhibited}="1"
-
-#SUBSYSTEM=="input", ATTR{name}=="Nintendo Wii Remote Accelerometer", MODE="0666", ENV{ID_INPUT_JOYSTICK}="1"
-### To stop it from generating events, use the rule below instead:
 SUBSYSTEM=="input", ATTR{name}=="Nintendo Wii Remote Accelerometer", ATTR{inhibited}="1"
-
-#SUBSYSTEM=="input", ATTR{name}=="Nintendo Wii Remote Motion Plus", MODE="0666", ENV{ID_INPUT_JOYSTICK}="1"
-### To stop it from generating events, use the rule below instead:
 SUBSYSTEM=="input", ATTR{name}=="Nintendo Wii Remote Motion Plus", ATTR{inhibited}="1"
-
-
-### The ones below don't don't need inhibit rules, as you can just disconnect them.
-SUBSYSTEM=="input", ATTR{name}=="Nintendo Wii Remote Balance Board", MODE="0666", ENV{ID_INPUT_JOYSTICK}="1"
-SUBSYSTEM=="input", ATTR{name}=="Nintendo Wii Remote Classic Controller Pro", MODE="0666", ENV{ID_INPUT_JOYSTICK}="1"
-SUBSYSTEM=="input", ATTR{name}=="Nintendo Wii Remote Classic Controller", MODE="0666", ENV{ID_INPUT_JOYSTICK}="1"
-SUBSYSTEM=="input", ATTR{name}=="Nintendo Wii Remote Drums", MODE="0666", ENV{ID_INPUT_JOYSTICK}="1"
-SUBSYSTEM=="input", ATTR{name}=="Nintendo Wii Remote Guitar", MODE="0666", ENV{ID_INPUT_JOYSTICK}="1"
-SUBSYSTEM=="input", ATTR{name}=="Nintendo Wii Remote Nunchuk", MODE="0666", ENV{ID_INPUT_JOYSTICK}="1"
-SUBSYSTEM=="input", ATTR{name}=="Nintendo Wii Remote Pro Controller", MODE="0666", ENV{ID_INPUT_JOYSTICK}="1"
-SUBSYSTEM=="input", ATTR{name}=="Nintendo Wii Remote Turntable", MODE="0666", ENV{ID_INPUT_JOYSTICK}="1"
